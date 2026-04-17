@@ -1,0 +1,248 @@
+/* ── VentaTalk Chat Widget ── */
+
+#ventabot-root *,
+#ventabot-root *::before,
+#ventabot-root *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Contenedor raíz ── */
+#ventabot-root {
+  position: fixed;
+  bottom: 24px;
+  z-index: 99999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#ventabot-root.pos-right { right: 24px; }
+#ventabot-root.pos-left  { left: 24px;  }
+
+/* ── Botón flotante ── */
+#ventabot-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.20), 0 1px 6px rgba(0,0,0,0.10);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  position: relative;
+  z-index: 2;
+}
+
+#ventabot-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
+}
+
+#ventabot-btn:active { transform: scale(0.97); }
+
+#ventabot-btn svg {
+  width: 30px;
+  height: 30px;
+  fill: #ffffff;
+  transition: opacity 150ms ease;
+}
+
+#ventabot-btn .vb-icon-close {
+  display: none;
+  width: 22px;
+  height: 22px;
+}
+
+#ventabot-root.is-open #ventabot-btn .vb-icon-wa    { display: none; }
+#ventabot-root.is-open #ventabot-btn .vb-icon-close { display: block; }
+
+/* Pulso de atención */
+#ventabot-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.25;
+  animation: vb-pulse 2.8s ease-out infinite;
+}
+
+@keyframes vb-pulse {
+  0%   { transform: scale(1);   opacity: 0.25; }
+  60%  { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+#ventabot-root.is-open #ventabot-btn::before { animation: none; opacity: 0; }
+
+/* ── Popup card ── */
+#ventabot-popup {
+  position: absolute;
+  bottom: 70px;
+  width: 300px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+  transform-origin: bottom center;
+
+  /* Estado inicial: oculto */
+  opacity: 0;
+  transform: scale(0.88) translateY(10px);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+#ventabot-root.pos-right #ventabot-popup { right: 0; }
+#ventabot-root.pos-left  #ventabot-popup { left: 0; }
+
+#ventabot-root.is-open #ventabot-popup {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+/* Header del popup */
+#ventabot-popup .vb-header {
+  padding: 18px 20px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#ventabot-popup .vb-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#ventabot-popup .vb-avatar svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+}
+
+#ventabot-popup .vb-meta {}
+
+#ventabot-popup .vb-business-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+#ventabot-popup .vb-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+#ventabot-popup .vb-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: vb-blink 2s ease-in-out infinite;
+}
+
+@keyframes vb-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+#ventabot-popup .vb-status-text {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Burbuja de mensaje */
+#ventabot-popup .vb-body {
+  padding: 0 20px 18px;
+}
+
+#ventabot-popup .vb-bubble {
+  background: #f3f4f6;
+  border-radius: 0 12px 12px 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.55;
+}
+
+/* CTA button */
+#ventabot-popup .vb-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0 20px 20px;
+  padding: 13px 18px;
+  border-radius: 12px;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 150ms ease, transform 100ms ease;
+}
+
+#ventabot-popup .vb-cta:hover  { filter: brightness(1.08); }
+#ventabot-popup .vb-cta:active { transform: scale(0.98); }
+
+#ventabot-popup .vb-cta svg {
+  width: 18px;
+  height: 18px;
+  fill: #ffffff;
+  flex-shrink: 0;
+}
+
+/* Footer con branding */
+#ventabot-popup .vb-footer {
+  padding: 10px 20px;
+  border-top: 1px solid #f3f4f6;
+  text-align: center;
+}
+
+#ventabot-popup .vb-footer a {
+  font-size: 11px;
+  color: #9ca3af;
+  text-decoration: none;
+}
+
+#ventabot-popup .vb-footer a:hover { color: #6b7280; }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  #ventabot-root.pos-right { right: 16px; }
+  #ventabot-root.pos-left  { left: 16px;  }
+
+  #ventabot-root { bottom: 16px; }
+
+  #ventabot-popup {
+    width: calc(100vw - 32px);
+  }
+
+  #ventabot-root.pos-right #ventabot-popup { right: 0; }
+  #ventabot-root.pos-left  #ventabot-popup { left: 0;  }
+}
+
+/* ── Reducir movimiento ── */
+@media (prefers-reduced-motion: reduce) {
+  #ventabot-btn,
+  #ventabot-btn::before,
+  #ventabot-popup,
+  .vb-status-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+}

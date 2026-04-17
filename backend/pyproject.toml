@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+env = [
+    "APP_ENV=testing",
+    "DATABASE_URL=postgresql+asyncpg://ventabot:ventabot_secret@localhost:5432/ventabot_test",
+    "DATABASE_URL_SYNC=postgresql://ventabot:ventabot_secret@localhost:5432/ventabot_test",
+    "REDIS_URL=redis://localhost:6379/9",
+    "CELERY_BROKER_URL=redis://localhost:6379/9",
+    "CELERY_RESULT_BACKEND=redis://localhost:6379/9",
+    "SECRET_KEY=test-secret-key-not-for-production",
+    "OPENAI_API_KEY=sk-test-fake",
+    "META_VERIFY_TOKEN=test-verify-token",
+    "META_APP_SECRET=test-app-secret",
+]

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+!.env.example
+
+# Next.js
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+
+# Docker
+*.log
+
+# DB / Redis
+postgres_data/
+redis_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+.claude/
+backend/celerybeat-schedule
