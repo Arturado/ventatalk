@@ -19,6 +19,8 @@ def upgrade() -> None:
     # pgvector ya está habilitado por init_db.sql
 
     # ── businesses ───────────────────────────────────────────────────
+    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+    op.execute('CREATE EXTENSION IF NOT EXISTS "vector"')
     op.create_table(
         "businesses",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()")),
