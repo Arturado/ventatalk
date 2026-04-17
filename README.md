@@ -84,3 +84,4 @@ docker compose exec db psql -U ventabot -d ventabot_db
 # Reiniciar solo el API (sin reconstruir)
 docker compose restart api
 ```
+# deploy test
