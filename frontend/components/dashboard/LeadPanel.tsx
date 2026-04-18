@@ -99,10 +99,10 @@ export function LeadPanel({ lead, onLeadChange }: LeadPanelProps) {
   };
 
   return (
-    <div className="w-56 flex-shrink-0 flex flex-col bg-white dark:bg-[#13161e] rounded-xl border border-slate-200 dark:border-[#1e2330] overflow-hidden">
+    <div className="w-56 flex-shrink-0 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
 
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-slate-100 dark:border-[#1e2330] flex items-center gap-2">
+      <div className="px-4 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center gap-2">
         <TrendingUp className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
         <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 tracking-tight">
           Pipeline del lead
@@ -121,7 +121,7 @@ export function LeadPanel({ lead, onLeadChange }: LeadPanelProps) {
           <button
             onClick={handleCreate}
             disabled={creating}
-            className="flex items-center gap-1.5 text-xs px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-colors cursor-pointer font-medium"
+            className="flex items-center gap-1.5 text-xs px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors cursor-pointer font-medium"
           >
             {creating ? (
               <Loader2 className="w-3 h-3 animate-spin" />

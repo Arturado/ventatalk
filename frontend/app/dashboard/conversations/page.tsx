@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { conversationsApi, contactsApi } from "@/lib/api";
 import {
   MessageSquare,
@@ -117,10 +118,10 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
     {
       label: "Total leads",
       value: total,
-      valueColor: "text-slate-800 dark:text-slate-100",
+      valueColor: "text-gray-900 dark:text-slate-100",
       labelColor: "text-slate-400 dark:text-slate-500",
-      bg: "bg-white dark:bg-[#13161e]",
-      border: "border-slate-200 dark:border-[#1e2330]",
+      bg: "bg-white dark:bg-slate-900",
+      border: "border-slate-200 dark:border-slate-700/50",
       Icon: Users,
       iconColor: "text-slate-400 dark:text-slate-500",
       iconBg: "bg-slate-100 dark:bg-white/5",
@@ -152,8 +153,8 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
       value: closed,
       valueColor: "text-slate-400 dark:text-slate-500",
       labelColor: "text-slate-400 dark:text-slate-600",
-      bg: "bg-white dark:bg-[#13161e]",
-      border: "border-slate-200 dark:border-[#1e2330]",
+      bg: "bg-white dark:bg-slate-900",
+      border: "border-slate-200 dark:border-slate-700/50",
       Icon: CheckCircle,
       iconColor: "text-slate-400 dark:text-slate-600",
       iconBg: "bg-slate-100 dark:bg-white/5",
@@ -182,6 +183,20 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
   );
 }
 
+// ─── Deep-link helper ────────────────────────────────────────────────────────
+// Reads ?id= from URL on mount and opens that conversation automatically.
+// Wrapped in <Suspense> by the caller (required by useSearchParams in Next.js 15).
+
+function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get("id");
+    if (id) onOpen(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConversationsPage() {
@@ -203,6 +218,11 @@ export default function ConversationsPage() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // ── Effects ───────────────────────────────────────────────────────────────
+
+  // Clear notification badge on mount
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("vt-badge-clear"));
+  }, []);
 
   // Polling de la lista de conversaciones (10s)
   useEffect(() => {
@@ -321,6 +341,11 @@ export default function ConversationsPage() {
   return (
     <div className="h-[calc(100vh-5rem)] flex flex-col gap-3">
 
+      {/* Deep-link opener (reads ?id= from URL) */}
+      <Suspense fallback={null}>
+        <DeepLinkOpener onOpen={openConversation} />
+      </Suspense>
+
       {/* Pipeline Bar */}
       <PipelineBar conversations={conversations} />
 
@@ -328,11 +353,11 @@ export default function ConversationsPage() {
       <div className="flex flex-1 gap-3 overflow-hidden min-h-0">
 
         {/* ── Sidebar: lista de conversaciones ─────────────────────────── */}
-        <div className="w-72 flex flex-col bg-white dark:bg-[#13161e] rounded-xl border border-slate-200 dark:border-[#1e2330] overflow-hidden">
+        <div className="w-72 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
 
           {/* Header sidebar */}
-          <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-[#1e2330]">
-            <h1 className="font-semibold text-slate-900 dark:text-slate-100 text-sm tracking-tight">
+          <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700/50">
+            <h1 className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight">
               Conversaciones
             </h1>
             <div className="flex gap-1 mt-3">
@@ -342,7 +367,7 @@ export default function ConversationsPage() {
                   onClick={() => setFilter(f.key)}
                   className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all duration-150 cursor-pointer ${
                     filter === f.key
-                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/30"
+                      ? "bg-blue-600 text-white shadow-sm"
                       : "text-slate-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-slate-300"
                   }`}
                 >
@@ -353,7 +378,7 @@ export default function ConversationsPage() {
           </div>
 
           {/* Lista */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a1f2a]">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
             {conversations.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
                 <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center">
@@ -374,7 +399,7 @@ export default function ConversationsPage() {
                   onClick={() => openConversation(conv.id)}
                   className={`w-full text-left px-4 py-3.5 transition-colors cursor-pointer border-l-2 ${
                     isActive
-                      ? "bg-indigo-50 dark:bg-indigo-600/10 border-indigo-500"
+                      ? "bg-blue-50 dark:bg-blue-600/10 border-blue-500"
                       : "border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.03]"
                   }`}
                 >
@@ -389,7 +414,7 @@ export default function ConversationsPage() {
                         <p
                           className={`text-sm font-semibold truncate ${
                             isActive
-                              ? "text-slate-900 dark:text-slate-100"
+                              ? "text-gray-900 dark:text-slate-100"
                               : "text-slate-700 dark:text-slate-300"
                           }`}
                         >
@@ -426,10 +451,10 @@ export default function ConversationsPage() {
         {/* ── Chat detalle + Lead panel ─────────────────────────────── */}
         {selected ? (
         <>
-          <div className="flex-1 flex flex-col bg-white dark:bg-[#13161e] rounded-xl border border-slate-200 dark:border-[#1e2330] overflow-hidden">
+          <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
 
             {/* Header chat */}
-            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-[#1e2330] flex items-center justify-between bg-white dark:bg-[#0f1117]">
+            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between bg-white dark:bg-slate-900">
               <div className="flex items-center gap-3">
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(
@@ -439,7 +464,7 @@ export default function ConversationsPage() {
                   {getInitials(selected.contact_name, selected.contact_phone)}
                 </div>
                 <div>
-                  <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-tight">
+                  <p className="font-semibold text-sm text-gray-900 dark:text-slate-100 leading-tight">
                     {selected.contact_name || selected.contact_phone}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-600">{selected.contact_phone}</p>
@@ -499,7 +524,7 @@ export default function ConversationsPage() {
 
             {/* Panel de tracking (desplegable) */}
             {showTrackingModal && (
-              <div className="border-b border-slate-100 dark:border-[#1e2330] bg-white dark:bg-[#0f1117] px-5 py-4 space-y-3">
+              <div className="border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 px-5 py-4 space-y-3">
                 <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                   <Link2 className="w-3 h-3" />
                   Links de seguimiento
@@ -510,13 +535,13 @@ export default function ConversationsPage() {
                     value={trackingUrl}
                     onChange={(e) => setTrackingUrl(e.target.value)}
                     placeholder="URL de destino (ej: https://tienda.cl/producto)"
-                    className="flex-1 text-xs px-3 py-2 bg-slate-100 dark:bg-[#1a1f2e] border border-slate-200 dark:border-[#252d40] text-slate-800 dark:text-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                    className="flex-1 text-xs px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
                   />
                   <input
                     value={trackingLabel}
                     onChange={(e) => setTrackingLabel(e.target.value)}
                     placeholder="Etiqueta (opcional)"
-                    className="w-32 text-xs px-3 py-2 bg-slate-100 dark:bg-[#1a1f2e] border border-slate-200 dark:border-[#252d40] text-slate-800 dark:text-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                    className="w-32 text-xs px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
                   />
                   <button
                     onClick={generateTrackingLink}
@@ -532,7 +557,7 @@ export default function ConversationsPage() {
                     {trackingLinks.map((link) => (
                       <div
                         key={link.token}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#1a1f2e] border border-slate-100 dark:border-[#252d40]"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60"
                       >
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${link.converted ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
                         <div className="flex-1 min-w-0">
@@ -567,7 +592,7 @@ export default function ConversationsPage() {
             )}
 
             {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 bg-slate-50 dark:bg-[#0d0f15]">
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 bg-slate-50 dark:bg-slate-950/80">
               {selected.messages.map((msg) => {
                 const isUser = msg.role === "user";
                 const isAI = msg.role === "assistant";
@@ -592,7 +617,7 @@ export default function ConversationsPage() {
                         }`}
                       >
                         {isUser ? (
-                          <User className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                          <User className="w-3 h-3 text-gray-500 dark:text-slate-400" />
                         ) : isAI ? (
                           <Bot className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                         ) : (
@@ -604,7 +629,7 @@ export default function ConversationsPage() {
                       <div
                         className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                           isUser
-                            ? "bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200 dark:bg-[#1a1f2e] dark:text-slate-200 dark:border-[#242b3d]"
+                            ? "bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700/60"
                             : "bg-indigo-600 text-white rounded-br-sm shadow-lg shadow-indigo-900/20"
                         }`}
                       >
@@ -619,7 +644,7 @@ export default function ConversationsPage() {
 
             {/* Input respuesta manual */}
             {selected.status !== "closed" && (
-              <div className="px-4 py-3.5 border-t border-slate-100 dark:border-[#1e2330] bg-white dark:bg-[#0f1117] flex gap-2 items-center">
+              <div className="px-4 py-3.5 border-t border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 flex gap-2 items-center">
                 <input
                   type="text"
                   value={replyText}
@@ -628,7 +653,7 @@ export default function ConversationsPage() {
                   placeholder="Responder como agente…"
                   className="flex-1 text-sm px-4 py-2.5
                     bg-slate-100 border border-slate-200 text-slate-800
-                    dark:bg-[#1a1f2e] dark:border-[#252d40] dark:text-slate-200
+                    dark:bg-slate-800 dark:border-slate-700/60 dark:text-slate-200
                     rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500
                     placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-shadow"
                 />
@@ -655,12 +680,12 @@ export default function ConversationsPage() {
         </>
         ) : (
           /* Estado vacío */
-          <div className="flex-1 bg-white dark:bg-[#13161e] rounded-xl border border-slate-200 dark:border-[#1e2330] flex flex-col items-center justify-center gap-4">
+          <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center gap-4">
             <div className="w-14 h-14 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center justify-center">
               <MessageSquare className="w-7 h-7 text-slate-400 dark:text-slate-600" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+              <p className="text-sm font-medium text-gray-500 dark:text-slate-400">
                 Selecciona una conversación
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">

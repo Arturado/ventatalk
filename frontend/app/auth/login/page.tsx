@@ -5,7 +5,7 @@ import { useAuthStore } from "@/lib/store";
 import toast from "react-hot-toast";
 import { AuthCard } from "@/components/auth/AuthCard";
 
-const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-slate-50 placeholder:text-slate-400 transition-shadow";
+const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 placeholder:text-slate-400 transition-shadow";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -34,7 +34,7 @@ export default function LoginPage() {
       footer={
         <p className="text-xs text-center text-slate-400">
           ¿Sin cuenta?{" "}
-          <a href="/auth/register" className="text-sky-600 hover:text-sky-700 font-semibold hover:underline">
+          <a href="/auth/register" className="text-blue-600 hover:text-blue-700 font-semibold hover:underline">
             Regístrate gratis
           </a>
         </p>
@@ -66,7 +66,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-sky-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm mt-2"
+          className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm mt-2"
         >
           {loading ? "Ingresando..." : "Ingresar"}
         </button>

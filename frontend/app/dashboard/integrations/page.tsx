@@ -28,7 +28,7 @@ interface WooStatus {
   store_url: string | null;
 }
 
-const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow";
+const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow";
 
 export default function IntegrationsPage() {
   const [jumpseller, setJumpseller] = useState<IntegrationStatus | null>(null);
@@ -244,7 +244,7 @@ export default function IntegrationsPage() {
               <ShoppingBag className="text-violet-600 dark:text-violet-400" style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Jumpseller</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Jumpseller</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {jumpseller?.connected ? jumpseller.store_name || "Conectado" : "No conectado"}
               </p>
@@ -254,7 +254,7 @@ export default function IntegrationsPage() {
             {jumpseller?.connected && (
               <button
                 onClick={() => setJsEditing(!jsEditing)}
-                className="text-xs flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
+                className="text-xs flex items-center gap-1.5 text-gray-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
               >
                 <Edit2 className="w-3 h-3" />
                 {jsEditing ? "Cancelar" : "Editar"}
@@ -278,7 +278,7 @@ export default function IntegrationsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Productos sincronizados</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{jumpseller.products_synced.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{jumpseller.products_synced.toLocaleString()}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Última sincronización</p>
@@ -302,7 +302,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={() => disconnect("jumpseller")}
-                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
                 >
                   Desconectar
                 </button>
@@ -317,7 +317,7 @@ export default function IntegrationsPage() {
                   Las nuevas credenciales reemplazarán el token actual.
                 </div>
               )}
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
                 Obtén las credenciales desde <strong className="text-slate-700 dark:text-slate-300">Jumpseller Admin → API</strong>
               </p>
               <input value={jsLogin} onChange={(e) => setJsLogin(e.target.value)} placeholder="Login Key" className={inputCls} />
@@ -343,7 +343,7 @@ export default function IntegrationsPage() {
               <Database className="text-amber-600 dark:text-amber-400" style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Bsale</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Bsale</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {bsale?.connected ? bsale.store_name || "Conectado" : "No conectado"}
               </p>
@@ -353,7 +353,7 @@ export default function IntegrationsPage() {
             {bsale?.connected && (
               <button
                 onClick={() => setBsEditing(!bsEditing)}
-                className="text-xs flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
+                className="text-xs flex items-center gap-1.5 text-gray-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
               >
                 <Edit2 className="w-3 h-3" />
                 {bsEditing ? "Cancelar" : "Editar"}
@@ -377,7 +377,7 @@ export default function IntegrationsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Productos sincronizados</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{bsale.products_synced.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{bsale.products_synced.toLocaleString()}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Última sincronización</p>
@@ -392,7 +392,7 @@ export default function IntegrationsPage() {
               )}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Máx. productos:</label>
+                  <label className="text-xs text-gray-500 dark:text-slate-400 font-medium">Máx. productos:</label>
                   <select
                     value={bsMaxProducts}
                     onChange={(e) => setBsMaxProducts(e.target.value)}
@@ -406,7 +406,7 @@ export default function IntegrationsPage() {
                 </div>
                 {priceLists.length > 0 && (
                   <div className="flex items-center gap-2 flex-1">
-                    <label className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 font-medium">Lista precio:</label>
+                    <label className="text-xs text-gray-500 dark:text-slate-400 flex-shrink-0 font-medium">Lista precio:</label>
                     <select
                       value={bsPriceListId}
                       onChange={(e) => setBsPriceListId(e.target.value)}
@@ -430,7 +430,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={() => disconnect("bsale")}
-                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
                 >
                   Desconectar
                 </button>
@@ -445,7 +445,7 @@ export default function IntegrationsPage() {
                   El nuevo token reemplazará el token actual de forma segura.
                 </div>
               )}
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
                 Obtén tu token desde <strong className="text-slate-700 dark:text-slate-300">Bsale Admin → Mi perfil → Token API</strong>
               </p>
               <input
@@ -479,7 +479,7 @@ export default function IntegrationsPage() {
               </svg>
             </div>
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Shopify</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Shopify</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {shopify?.connected ? shopify.store_name || "Conectado" : "No conectado"}
               </p>
@@ -489,7 +489,7 @@ export default function IntegrationsPage() {
             {shopify?.connected && (
               <button
                 onClick={() => setSfEditing(!sfEditing)}
-                className="text-xs flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
+                className="text-xs flex items-center gap-1.5 text-gray-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
               >
                 <Edit2 className="w-3 h-3" />
                 {sfEditing ? "Cancelar" : "Editar"}
@@ -513,7 +513,7 @@ export default function IntegrationsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Productos sincronizados</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{shopify.products_synced.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{shopify.products_synced.toLocaleString()}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Última sincronización</p>
@@ -537,7 +537,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={() => disconnect("shopify")}
-                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
                 >
                   Desconectar
                 </button>
@@ -552,7 +552,7 @@ export default function IntegrationsPage() {
                   Las nuevas credenciales reemplazarán el token actual.
                 </div>
               )}
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
                 Obtén el token en <strong className="text-slate-700 dark:text-slate-300">Shopify Admin → Configuración → Apps → Develop apps</strong>. Necesitas permisos <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded text-[11px]">read_products</code> e <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded text-[11px]">read_inventory</code>.
               </p>
               <input
@@ -594,7 +594,7 @@ export default function IntegrationsPage() {
               </svg>
             </div>
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">MercadoLibre</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">MercadoLibre</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {ml?.connected ? ml.store_name || "Conectado" : "No conectado"}
               </p>
@@ -604,7 +604,7 @@ export default function IntegrationsPage() {
             {ml?.connected && (
               <button
                 onClick={() => setMlEditing(!mlEditing)}
-                className="text-xs flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
+                className="text-xs flex items-center gap-1.5 text-gray-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
               >
                 <Edit2 className="w-3 h-3" />
                 {mlEditing ? "Cancelar" : "Editar"}
@@ -628,7 +628,7 @@ export default function IntegrationsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Productos sincronizados</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{ml.products_synced.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{ml.products_synced.toLocaleString()}</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Última sincronización</p>
@@ -652,7 +652,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={() => disconnect("mercadolibre")}
-                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium"
                 >
                   Desconectar
                 </button>
@@ -667,7 +667,7 @@ export default function IntegrationsPage() {
                   Las nuevas credenciales reemplazarán las actuales.
                 </div>
               )}
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
                 Obtén las credenciales en <strong className="text-slate-700 dark:text-slate-300">developers.mercadolibre.com → Mis Apps → Crear App</strong>. Tu Seller ID está en tu perfil de ML.
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -701,17 +701,17 @@ export default function IntegrationsPage() {
       <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-9 h-9 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center">
-            <FileSpreadsheet className="text-slate-500 dark:text-slate-400" style={{ width: 18, height: 18 }} />
+            <FileSpreadsheet className="text-gray-500 dark:text-slate-400" style={{ width: 18, height: 18 }} />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">CSV Manual</p>
+            <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">CSV Manual</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">Siempre disponible</p>
           </div>
           <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1.5 rounded-full">
             <CheckCircle2 className="w-3.5 h-3.5" /> Disponible
           </span>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 ml-12">
+        <p className="text-xs text-gray-500 dark:text-slate-400 ml-12">
           Para subir tu catálogo CSV ve a <strong className="text-slate-700 dark:text-slate-300">Configuración → Fuente del catálogo → CSV</strong>.
         </p>
       </section>
@@ -727,7 +727,7 @@ export default function IntegrationsPage() {
               </svg>
             </div>
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">WordPress / WooCommerce</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">WordPress / WooCommerce</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {woo?.connected ? (woo.store_url || "Conectado vía plugin") : "Plugin de catálogo"}
               </p>
@@ -750,7 +750,7 @@ export default function IntegrationsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                 <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Productos sincronizados</p>
-                <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{woo.products_synced.toLocaleString()}</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-slate-100">{woo.products_synced.toLocaleString()}</p>
               </div>
               <div className="bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
                 <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-0.5">Última sincronización</p>
@@ -770,7 +770,7 @@ export default function IntegrationsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 relative">
-                  <code className={`block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-700 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 overflow-hidden ${wooTokenVisible ? "" : "blur-sm select-none"}`}>
+                  <code className={`block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-700 rounded-lg text-xs font-mono text-gray-900 dark:text-slate-100 overflow-hidden ${wooTokenVisible ? "" : "blur-sm select-none"}`}>
                     {wooToken}
                   </code>
                 </div>
@@ -783,7 +783,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={copyToken}
-                  className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Copiar
@@ -806,7 +806,7 @@ export default function IntegrationsPage() {
               <Globe className="w-3.5 h-3.5" />
               Cómo conectar tu tienda
             </p>
-            <ol className="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-none">
+            <ol className="text-xs text-gray-500 dark:text-slate-400 space-y-1.5 list-none">
               <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-full flex items-center justify-center font-bold text-[10px]">1</span>Genera un token de API aquí abajo</li>
               <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-full flex items-center justify-center font-bold text-[10px]">2</span>Descarga e instala el plugin <strong className="text-slate-600 dark:text-slate-300">VentaTalk Chat Widget</strong> en tu WordPress</li>
               <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-full flex items-center justify-center font-bold text-[10px]">3</span>En <strong className="text-slate-600 dark:text-slate-300">Ajustes → VentaTalk</strong> pega el token generado</li>
@@ -819,7 +819,7 @@ export default function IntegrationsPage() {
             <button
               onClick={generateWooToken}
               disabled={wooGenerating}
-              className="flex-1 flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
+              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
             >
               {wooGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
               {wooGenerating ? "Generando..." : woo?.connected ? "Regenerar token" : "Generar token de API"}
@@ -828,7 +828,7 @@ export default function IntegrationsPage() {
               <button
                 onClick={revokeWooToken}
                 disabled={wooRevoking}
-                className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium flex items-center gap-1.5"
+                className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium flex items-center gap-1.5"
               >
                 {wooRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                 Revocar
@@ -839,7 +839,7 @@ export default function IntegrationsPage() {
       </section>
 
       {/* ── Próximamente ───────────────────────────────── */}
-      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5">
+      <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-5">
         <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Próximamente</p>
         <div className="flex flex-wrap gap-2">
           {["Shopify", "MercadoLibre", "Mercado Shops"].map((name) => (

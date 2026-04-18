@@ -19,7 +19,7 @@ interface Contact {
 
 const STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  interested: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400",
+  interested: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400",
   quoted: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400",
   closed_won: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400",
   closed_lost: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
@@ -34,7 +34,7 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const AVATAR_PALETTE = [
-  "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300",
+  "bg-blue-100 text-blue-700 dark:bg-sky-900/60 dark:text-sky-300",
   "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
   "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
@@ -114,8 +114,8 @@ export default function ContactsPage() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por nombre o teléfono..."
           className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm
-            bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200
-            focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent
+            bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100
+            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
             shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow"
         />
       </div>
@@ -125,10 +125,10 @@ export default function ContactsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50">
-              <th className="text-left px-5 py-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contacto</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Teléfono</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Etapa</th>
-              <th className="text-left px-5 py-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Última actividad</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Contacto</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Teléfono</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Etapa</th>
+              <th className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Última actividad</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
@@ -148,13 +148,13 @@ export default function ContactsPage() {
                       {getInitials(c.name, c.wa_phone)}
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{c.name || "Sin nombre"}</p>
+                      <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{c.name || "Sin nombre"}</p>
                       {c.email && <p className="text-xs text-slate-400 dark:text-slate-500">{c.email}</p>}
                     </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm">
+                  <div className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400 text-sm">
                     <Phone className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                     <span>+{c.wa_phone}</span>
                   </div>
@@ -175,7 +175,7 @@ export default function ContactsPage() {
                   <div className="flex items-center gap-1 justify-end">
                     <button
                       onClick={() => setEditing(c)}
-                      className="p-1.5 hover:bg-sky-50 dark:hover:bg-sky-900/30 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer"
+                      className="p-1.5 hover:bg-blue-50 dark:hover:bg-sky-900/30 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -196,7 +196,7 @@ export default function ContactsPage() {
       {/* Modal edición */}
       {editing && (
         <Modal size="md">
-          <h2 className="font-bold text-slate-900 dark:text-slate-100 text-base mb-1">Editar contacto</h2>
+          <h2 className="font-bold text-gray-900 dark:text-slate-100 text-base mb-1">Editar contacto</h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">Actualiza la información del contacto</p>
           <div className="space-y-4">
             {[
@@ -211,8 +211,8 @@ export default function ContactsPage() {
                   value={(editing[key] as string) || ""}
                   onChange={(e) => setEditing({ ...editing, [key]: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm
-                    bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200
-                    focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-shadow"
+                    bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                 />
               </div>
             ))}
@@ -227,7 +227,7 @@ export default function ContactsPage() {
             </button>
             <button
               onClick={saveEdit}
-              className="flex-1 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors cursor-pointer shadow-sm"
+              className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
             >
               Guardar cambios
             </button>

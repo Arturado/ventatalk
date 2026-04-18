@@ -3,8 +3,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
+from jose import JWTError, jwt
+import uuid
 
 from app.core.database import get_db
+from app.core.config import get_settings
 from app.core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -12,6 +15,8 @@ from app.core.security import (
 )
 from app.models.models import Business
 import re
+
+settings = get_settings()
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,6 +31,10 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 def _slugify(text: str) -> str:
@@ -76,6 +85,33 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
         )
+
+    return TokenResponse(
+        access_token=create_access_token(business.id),
+        refresh_token=create_refresh_token(business.id),
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Intercambia un refresh token válido por un nuevo par de tokens (rotation)."""
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Refresh token inválido o expirado",
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        business_id: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        if not business_id or token_type != "refresh":
+            raise invalid
+    except JWTError:
+        raise invalid
+
+    result = await db.execute(select(Business).where(Business.id == uuid.UUID(business_id)))
+    business = result.scalar_one_or_none()
+    if not business or not business.is_active:
+        raise invalid
 
     return TokenResponse(
         access_token=create_access_token(business.id),

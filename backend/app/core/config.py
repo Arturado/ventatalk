@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30       # 30 días para el refresh token
 
     # DB
     DATABASE_URL: str

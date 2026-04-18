@@ -5,7 +5,7 @@ import { authApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { AuthCard } from "@/components/auth/AuthCard";
 
-const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-slate-50 placeholder:text-slate-400 transition-shadow";
+const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 placeholder:text-slate-400 transition-shadow";
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -18,6 +18,7 @@ export default function RegisterPage() {
     try {
       const res = await authApi.register(form.name, form.email, form.password);
       localStorage.setItem("access_token", res.data.access_token);
+      localStorage.setItem("refresh_token", res.data.refresh_token);
       toast.success("¡Cuenta creada! Bienvenido.");
       router.push("/dashboard");
     } catch (err: any) {
@@ -48,7 +49,7 @@ export default function RegisterPage() {
       footer={
         <p className="text-xs text-center text-slate-400">
           ¿Ya tienes cuenta?{" "}
-          <a href="/auth/login" className="text-sky-600 hover:text-sky-700 font-semibold hover:underline">
+          <a href="/auth/login" className="text-blue-600 hover:text-blue-700 font-semibold hover:underline">
             Inicia sesión
           </a>
         </p>
@@ -61,7 +62,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-sky-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm mt-2"
+          className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm mt-2"
         >
           {loading ? "Creando cuenta..." : "Crear cuenta gratis"}
         </button>

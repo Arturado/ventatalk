@@ -18,14 +18,14 @@ interface Lead {
 
 const STAGES = [
   { key: "new",         label: "Nuevos",      border: "border-slate-200 dark:border-slate-700",   header: "bg-slate-50 text-slate-600 dark:bg-slate-800/80 dark:text-slate-400",       dot: "bg-slate-400 dark:bg-slate-500" },
-  { key: "interested",  label: "Interesados", border: "border-sky-200 dark:border-sky-900",       header: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-400",               dot: "bg-sky-500" },
+  { key: "interested",  label: "Interesados", border: "border-blue-200 dark:border-blue-900",       header: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400",               dot: "bg-blue-500" },
   { key: "quoted",      label: "Cotizados",   border: "border-amber-200 dark:border-amber-900",   header: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400",       dot: "bg-amber-500" },
   { key: "closed_won",  label: "Cerrados ✓",  border: "border-emerald-200 dark:border-emerald-900", header: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400", dot: "bg-emerald-500" },
   { key: "closed_lost", label: "Perdidos",    border: "border-red-200 dark:border-red-900",       header: "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400",              dot: "bg-red-400" },
 ];
 
 const AVATAR_PALETTE = [
-  "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300",
+  "bg-blue-100 text-blue-700 dark:bg-sky-900/60 dark:text-sky-300",
   "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
   "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
   "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
@@ -123,13 +123,13 @@ export default function LeadsPage() {
                   <div
                     key={lead.id}
                     onClick={() => setSelected(lead)}
-                    className="bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl p-3 cursor-pointer hover:border-sky-300 dark:hover:border-sky-600 hover:shadow-sm transition-all duration-150 group"
+                    className="bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl p-3 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all duration-150 group"
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${getAvatarColor(lead.contact_phone)}`}>
                         {getInitials(lead.contact_name, lead.contact_phone)}
                       </div>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-sky-700 dark:group-hover:text-sky-400 transition-colors">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
                         {lead.contact_name || lead.contact_phone}
                       </p>
                     </div>
@@ -166,7 +166,7 @@ export default function LeadsPage() {
           >
             {/* Header panel */}
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-800 z-10">
-              <h2 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Detalle del lead</h2>
+              <h2 className="font-bold text-gray-900 dark:text-slate-100 text-sm">Detalle del lead</h2>
               <button
                 onClick={() => setSelected(null)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
@@ -182,8 +182,8 @@ export default function LeadsPage() {
                   {getInitials(selected.contact_name, selected.contact_phone)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{selected.contact_name || "Sin nombre"}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">+{selected.contact_phone}</p>
+                  <p className="font-bold text-gray-900 dark:text-slate-100 text-sm">{selected.contact_name || "Sin nombre"}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">+{selected.contact_phone}</p>
                 </div>
               </div>
 
@@ -201,14 +201,14 @@ export default function LeadsPage() {
               {/* Notas */}
               {selected.notes && (
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Notas</p>
+                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-2">Notas</p>
                   <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{selected.notes}</p>
                 </div>
               )}
 
               {/* Mover etapa */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Mover a etapa</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-2">Mover a etapa</p>
                 <div className="space-y-1.5">
                   {STAGES.map((s) => (
                     <button

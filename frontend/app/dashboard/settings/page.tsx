@@ -6,11 +6,12 @@ import {
   Bot, Upload, Phone, Save, CheckCircle2,
   EyeOff, Search, RefreshCw, Database,
   FileSpreadsheet, ShoppingBag, AlertTriangle, Globe,
-  Plus, Trash2, Eye,
+  Plus, Trash2, Eye, Bell, BellOff, BellRing,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
+import { useNotifications } from "@/lib/useNotifications";
 
 interface PhoneNumber {
   id: string;
@@ -41,7 +42,7 @@ const SOURCE_INFO: Record<string, { label: string; icon: any; border: string; bg
     label: "CSV Manual",
     icon: FileSpreadsheet,
     border: "border-slate-300 dark:border-slate-600",
-    bg: "bg-slate-50 dark:bg-slate-800",
+    bg: "bg-white dark:bg-slate-800",
     badge: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
   },
   jumpseller: {
@@ -81,7 +82,7 @@ const SOURCE_INFO: Record<string, { label: string; icon: any; border: string; bg
   },
 };
 
-const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500";
+const inputCls = "w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500";
 const labelCls = "text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5";
 
 export default function SettingsPage() {
@@ -283,7 +284,7 @@ export default function SettingsPage() {
           <div className="w-7 h-7 bg-sky-100 dark:bg-sky-900/50 rounded-lg flex items-center justify-center">
             <Bot className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
           </div>
-          <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Agente IA</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Agente IA</h2>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -318,12 +319,12 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between py-3 border-t border-slate-100 dark:border-slate-700">
             <div>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">IA activa</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">IA activa</p>
               <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Desactivar para respuesta solo humana</p>
             </div>
             <button
               onClick={() => setProfile({ ...profile, ai_enabled: !profile.ai_enabled })}
-              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${profile.ai_enabled ? "bg-sky-600" : "bg-slate-300 dark:bg-slate-600"}`}
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${profile.ai_enabled ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${profile.ai_enabled ? "translate-x-5" : "translate-x-0.5"}`} />
             </button>
@@ -331,7 +332,7 @@ export default function SettingsPage() {
           <button
             onClick={saveProfile}
             disabled={saving}
-            className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
           >
             <Save className="w-4 h-4" />
             {saving ? "Guardando..." : "Guardar cambios"}
@@ -346,7 +347,7 @@ export default function SettingsPage() {
             <div className="w-7 h-7 bg-sky-100 dark:bg-sky-900/50 rounded-lg flex items-center justify-center">
               <Database className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
             </div>
-            <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Fuente del catálogo</h2>
+            <h2 className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Fuente del catálogo</h2>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -363,7 +364,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="p-5 space-y-4">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-gray-500 dark:text-slate-400">
             Elige <strong className="text-slate-700 dark:text-slate-300">una</strong> fuente activa. Al cambiar, los productos de la fuente anterior se eliminan automáticamente.
           </p>
           <div className="grid grid-cols-2 gap-2">
@@ -387,7 +388,7 @@ export default function SettingsPage() {
                     </div>
                   )}
                   <Icon className={`w-5 h-5 mb-2 ${isActive ? "text-slate-700 dark:text-slate-300" : "text-slate-400 dark:text-slate-500"}`} />
-                  <p className={`text-xs font-bold ${isActive ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}>{info.label}</p>
+                  <p className={`text-xs font-bold ${isActive ? "text-gray-900 dark:text-slate-100" : "text-gray-500 dark:text-slate-400"}`}>{info.label}</p>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-medium">
                     {count > 0 ? `${count} productos` : "Sin productos"}
                   </p>
@@ -401,7 +402,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-2.5 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-sky-400 dark:hover:border-sky-500 rounded-xl px-4 py-3.5 text-sm text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 w-full justify-center disabled:opacity-50 transition-colors cursor-pointer font-medium"
+                className="flex items-center gap-2.5 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-sky-400 dark:hover:border-sky-500 rounded-xl px-4 py-3.5 text-sm text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 w-full justify-center disabled:opacity-50 transition-colors cursor-pointer font-medium"
               >
                 <Upload className="w-4 h-4" />
                 {uploading ? "Generando embeddings..." : "Subir CSV (name, description, price, category)"}
@@ -434,7 +435,7 @@ export default function SettingsPage() {
       {catalog.length > 0 && (
         <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
-            <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Productos — visibles para la IA</h2>
+            <h2 className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Productos — visibles para la IA</h2>
             <div className="flex items-center gap-2.5 text-xs">
               <span className="text-emerald-600 dark:text-emerald-400 font-bold">{activeCount} activos</span>
               {hiddenCount > 0 && <span className="text-slate-400 dark:text-slate-500 font-medium">{hiddenCount} ocultos</span>}
@@ -448,7 +449,7 @@ export default function SettingsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar producto..."
-                  className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
               <select
@@ -473,14 +474,14 @@ export default function SettingsPage() {
                 return (
                   <div
                     key={item.id}
-                    className={`flex items-center justify-between px-4 py-2.5 ${!item.is_available ? "opacity-50 bg-slate-50 dark:bg-slate-800/60" : "hover:bg-slate-50/50 dark:hover:bg-slate-700/30"} transition-colors`}
+                    className={`flex items-center justify-between px-4 py-2.5 ${!item.is_available ? "opacity-50 bg-white dark:bg-slate-800/60" : "hover:bg-slate-50/50 dark:hover:bg-slate-700/30"} transition-colors`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold flex-shrink-0 ${srcInfo?.badge || "bg-slate-100 text-slate-500"}`}>
                         {(item.source || "csv").toUpperCase().slice(0, 2)}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{item.name}</p>
                         {item.category && <p className="text-xs text-slate-400 dark:text-slate-500">{item.category}</p>}
                       </div>
                     </div>
@@ -516,7 +517,7 @@ export default function SettingsPage() {
             <div className="w-7 h-7 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg flex items-center justify-center">
               <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Números de WhatsApp</h2>
+            <h2 className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Números de WhatsApp</h2>
           </div>
           <button
             onClick={() => setShowPhoneForm((v) => !v)}
@@ -634,8 +635,8 @@ export default function SettingsPage() {
                   <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{phone.display_name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{phone.phone_number}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{phone.display_name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{phone.phone_number}</p>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">ID: {phone.phone_number_id}</p>
                 </div>
               </div>
@@ -656,6 +657,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* ── Notificaciones ─────────────────────────────────────── */}
+      <NotificationsSection />
+
       {/* Modal confirmación cambio fuente */}
       {confirmSource && (
         <Modal size="sm">
@@ -664,8 +668,8 @@ export default function SettingsPage() {
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <p className="font-bold text-slate-900 dark:text-slate-100">Cambiar fuente de catálogo</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Esta acción elimina los productos existentes</p>
+              <p className="font-bold text-gray-900 dark:text-slate-100">Cambiar fuente de catálogo</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Esta acción elimina los productos existentes</p>
             </div>
           </div>
           <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
@@ -696,5 +700,117 @@ export default function SettingsPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+// ─── Notifications section (isolated component to avoid re-renders) ───────────
+
+function NotificationsSection() {
+  const { permission, enabled, toggleEnabled, requestAndEnable } = useNotifications();
+
+  const statusConfig = {
+    granted: {
+      icon: BellRing,
+      label: "Activo",
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-50 dark:bg-emerald-500/10",
+      border: "border-emerald-100 dark:border-emerald-500/20",
+    },
+    default: {
+      icon: Bell,
+      label: "No configurado",
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-50 dark:bg-amber-500/10",
+      border: "border-amber-100 dark:border-amber-500/20",
+    },
+    denied: {
+      icon: BellOff,
+      label: "Bloqueado por el navegador",
+      color: "text-red-500 dark:text-red-400",
+      bg: "bg-red-50 dark:bg-red-500/10",
+      border: "border-red-100 dark:border-red-500/20",
+    },
+  } as const;
+
+  const cfg = statusConfig[permission];
+  const StatusIcon = cfg.icon;
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center gap-3">
+        <div className="w-8 h-8 bg-blue-50 dark:bg-blue-500/15 rounded-lg flex items-center justify-center">
+          <Bell className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Notificaciones del navegador</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+            Recibe alertas cuando lleguen mensajes nuevos
+          </p>
+        </div>
+      </div>
+
+      <div className="px-6 py-5 space-y-4">
+        {/* Status badge */}
+        <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${cfg.bg} ${cfg.border}`}>
+          <StatusIcon className={`w-4 h-4 flex-shrink-0 ${cfg.color}`} />
+          <span className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
+        </div>
+
+        {/* Toggle — only when granted */}
+        {permission === "granted" && (
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">
+                Notificaciones activas
+              </p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                Recibe alertas de mensajes nuevos aunque no estés en esta pestaña
+              </p>
+            </div>
+            <button
+              onClick={() => toggleEnabled(!enabled)}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                enabled ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
+              }`}
+              role="switch"
+              aria-checked={enabled}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                  enabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        )}
+
+        {/* Request button — only when default */}
+        {permission === "default" && (
+          <button
+            onClick={requestAndEnable}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer shadow-sm"
+          >
+            <Bell className="w-4 h-4" />
+            Solicitar permiso de notificaciones
+          </button>
+        )}
+
+        {/* Denied instructions */}
+        {permission === "denied" && (
+          <div className="bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+              Para activarlas, sigue estos pasos:
+            </p>
+            <ol className="text-xs text-gray-500 dark:text-slate-400 space-y-1 list-decimal list-inside">
+              <li>Haz clic en el icono del candado en la barra de dirección</li>
+              <li>Busca la opción &quot;Notificaciones&quot;</li>
+              <li>Cámbiala a &quot;Permitir&quot;</li>
+              <li>Recarga la página</li>
+            </ol>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
