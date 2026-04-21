@@ -1,6 +1,9 @@
 "use client";
-import { ArrowUpRight, Zap } from "lucide-react";
+import { useState } from "react";
+import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { UsageData } from "@/lib/api";
+import { billingApi } from "@/lib/api";
 
 const PLAN_STYLES: Record<string, string> = {
   starter: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20",
@@ -23,11 +26,36 @@ function ProgressBar({ pct }: { pct: number }) {
   );
 }
 
+const NEXT_PLAN: Record<string, string | null> = {
+  starter: "pro",
+  pro: "business",
+  business: null,
+};
+
+const NEXT_PLAN_LABEL: Record<string, string> = {
+  pro: "Pro",
+  business: "Business",
+};
+
 export function PlanUsageCard({ usage }: { usage: UsageData }) {
+  const [upgrading, setUpgrading] = useState(false);
   const badgeStyle = PLAN_STYLES[usage.plan] ?? PLAN_STYLES.starter;
   const convUnlimited = usage.conversations_limit === -1;
   const channelsUnlimited = usage.channels_limit === -1;
   const catalogUnlimited = usage.catalog_limit === -1;
+  const nextPlan = NEXT_PLAN[usage.plan] ?? null;
+
+  const handleUpgrade = async () => {
+    if (!nextPlan || upgrading) return;
+    setUpgrading(true);
+    try {
+      const res = await billingApi.createCheckoutSession(nextPlan);
+      window.location.href = res.data.checkout_url;
+    } catch {
+      toast.error("Error al iniciar el pago. Inténtalo de nuevo.");
+      setUpgrading(false);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-5">
@@ -92,20 +120,27 @@ export function PlanUsageCard({ usage }: { usage: UsageData }) {
       </div>
 
       {/* Upgrade CTA */}
-      <a
-        href="https://ventatalk.com/pricing"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-5 w-full flex items-center justify-center gap-1.5 text-xs font-semibold
-          text-blue-600 dark:text-blue-400
-          bg-blue-50 dark:bg-blue-500/10
-          border border-blue-100 dark:border-blue-500/20
-          hover:bg-blue-100 dark:hover:bg-blue-500/20
-          rounded-lg px-3 py-2.5 transition-colors"
-      >
-        Mejorar plan
-        <ArrowUpRight className="w-3.5 h-3.5" />
-      </a>
+      {nextPlan && (
+        <button
+          onClick={handleUpgrade}
+          disabled={upgrading}
+          className="mt-5 w-full flex items-center justify-center gap-1.5 text-xs font-semibold
+            text-blue-600 dark:text-blue-400
+            bg-blue-50 dark:bg-blue-500/10
+            border border-blue-100 dark:border-blue-500/20
+            hover:bg-blue-100 dark:hover:bg-blue-500/20
+            rounded-lg px-3 py-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {upgrading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <>
+              Mejorar a {NEXT_PLAN_LABEL[nextPlan]}
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

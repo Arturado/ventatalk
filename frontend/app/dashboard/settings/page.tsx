@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { authApi, businessApi, phoneNumbersApi } from "@/lib/api";
+import { authApi, businessApi, phoneNumbersApi, billingApi } from "@/lib/api";
 import api from "@/lib/api";
 import {
   Bot, Upload, Phone, Save, CheckCircle2,
   EyeOff, Search, RefreshCw, Database,
   FileSpreadsheet, ShoppingBag, AlertTriangle, Globe,
   Plus, Trash2, Eye, Bell, BellOff, BellRing,
+  CreditCard, ExternalLink, Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -657,6 +658,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* ── Suscripción ────────────────────────────────────────── */}
+      <BillingSection />
+
       {/* ── Notificaciones ─────────────────────────────────────── */}
       <NotificationsSection />
 
@@ -700,6 +704,59 @@ export default function SettingsPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+// ─── Billing section ─────────────────────────────────────────────────────────
+
+function BillingSection() {
+  const [loading, setLoading] = useState(false);
+
+  const openPortal = async () => {
+    setLoading(true);
+    try {
+      const res = await billingApi.getPortalUrl();
+      window.location.href = res.data.portal_url;
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.detail || "Error al abrir el portal de suscripción"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center gap-3">
+        <div className="w-8 h-8 bg-violet-50 dark:bg-violet-500/15 rounded-lg flex items-center justify-center">
+          <CreditCard className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Suscripción</h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+            Gestiona tu plan, facturas y método de pago
+          </p>
+        </div>
+      </div>
+      <div className="px-6 py-5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          Accede al portal de Stripe para ver tus facturas, cambiar de plan o actualizar tu método de pago.
+        </p>
+        <button
+          onClick={openPortal}
+          disabled={loading}
+          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer shadow-sm"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <ExternalLink className="w-4 h-4" />
+          )}
+          Gestionar suscripción
+        </button>
+      </div>
+    </section>
   );
 }
 

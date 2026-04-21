@@ -197,6 +197,17 @@ export interface UsageData {
   days_until_reset: number;
 }
 
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+export const billingApi = {
+  createCheckoutSession: (plan: string) =>
+    api.post<{ checkout_url: string }>("/api/v1/billing/create-checkout-session", { plan }),
+  getPortalUrl: () =>
+    api.get<{ portal_url: string }>("/api/v1/billing/portal"),
+};
+
+// ─── Business ─────────────────────────────────────────────────────────────────
+
 export const businessApi = {
   uploadCatalog: (file: File) => {
     const form = new FormData();

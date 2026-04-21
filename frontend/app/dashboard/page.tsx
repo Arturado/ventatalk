@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   MessageSquare, Users, TrendingUp, DollarSign,
   Bot, AlertCircle, ArrowUpRight,
@@ -8,7 +9,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { analyticsApi, businessApi, type UsageData } from "@/lib/api";
+import toast from "react-hot-toast";
+import { analyticsApi, businessApi, billingApi, type UsageData } from "@/lib/api";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { PlanUsageCard } from "@/components/dashboard/PlanUsageCard";
 import { useAuthStore } from "@/lib/store";
@@ -34,12 +36,24 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState<{ date: string; conversations: number }[]>([]);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const { business } = useAuthStore();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     analyticsApi.overview().then((r) => setOverview(r.data));
     analyticsApi.conversations(30).then((r) => setChartData(r.data));
     businessApi.usage().then((r) => setUsageData(r.data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("upgraded") === "true") {
+      toast.success("¡Plan actualizado exitosamente! 🎉", { duration: 5000 });
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("upgraded");
+      const newPath = params.toString() ? `?${params.toString()}` : window.location.pathname;
+      router.replace(newPath);
+    }
+  }, [searchParams, router]);
 
   if (!overview) return <LoadingSkeleton />;
 
@@ -61,6 +75,17 @@ export default function DashboardPage() {
   const convPct = usageData?.conversations_pct ?? 0;
   const convLimited = usageData && usageData.conversations_limit !== -1;
 
+  const handleBannerUpgrade = async () => {
+    if (!usageData) return;
+    const next = usageData.plan === "starter" ? "pro" : "business";
+    try {
+      const res = await billingApi.createCheckoutSession(next);
+      window.location.href = res.data.checkout_url;
+    } catch {
+      toast.error("Error al iniciar el pago. Inténtalo de nuevo.");
+    }
+  };
+
   return (
     <div className="space-y-5 md:space-y-6">
 
@@ -74,14 +99,12 @@ export default function DashboardPage() {
               Has usado el 100% de tus conversaciones este mes. Los mensajes entrantes están bloqueados hasta el próximo ciclo o al mejorar tu plan.
             </p>
           </div>
-          <a
-            href="https://ventatalk.com/pricing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors"
+          <button
+            onClick={handleBannerUpgrade}
+            className="flex-shrink-0 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             Mejorar plan
-          </a>
+          </button>
         </div>
       )}
       {convLimited && convPct >= 90 && convPct < 100 && (
@@ -93,14 +116,12 @@ export default function DashboardPage() {
               Te quedan {(usageData!.conversations_limit - usageData!.conversations_this_month).toLocaleString()} conversaciones disponibles este mes. Mejora tu plan para evitar interrupciones.
             </p>
           </div>
-          <a
-            href="https://ventatalk.com/pricing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg transition-colors"
+          <button
+            onClick={handleBannerUpgrade}
+            className="flex-shrink-0 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             Mejorar plan
-          </a>
+          </button>
         </div>
       )}
 
