@@ -147,7 +147,15 @@ async def manual_reply(
         raise HTTPException(404, "Conversación no encontrada")
 
     if not conv.phone_number:
-        raise HTTPException(400, "No hay número de WhatsApp configurado")
+        # Conversación de widget web: solo guardar en DB sin enviar por WhatsApp
+        msg = Message(
+            conversation_id=conv.id,
+            role=MessageRole.ASSISTANT,
+            content=body.text,
+        )
+        db.add(msg)
+        await db.commit()
+        return {"wa_message_id": None}
 
     wa_service = WhatsAppService(
         phone_number_id=conv.phone_number.phone_number_id,
