@@ -113,15 +113,74 @@ export default function ContactsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por nombre o teléfono..."
-          className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm
+          className="w-full pl-10 pr-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl text-base md:text-sm
             bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
             shadow-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow"
         />
       </div>
 
-      {/* Tabla */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+      {/* ── Mobile card view ─────────────────────────────────────────── */}
+      <div className="block md:hidden space-y-3">
+        {contacts.length === 0 && (
+          <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm font-medium">
+            Sin contactos aún
+          </div>
+        )}
+        {contacts.map((c) => (
+          <div
+            key={c.id}
+            className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(c.wa_phone)}`}>
+                  {getInitials(c.name, c.wa_phone)}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm truncate">{c.name || "Sin nombre"}</p>
+                  <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                    <Phone className="w-3 h-3 flex-shrink-0" />
+                    <span>+{c.wa_phone}</span>
+                  </div>
+                </div>
+              </div>
+              {c.lead_stage ? (
+                <span className={`text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${STAGE_COLORS[c.lead_stage] || "bg-slate-100 text-slate-500"}`}>
+                  {STAGE_LABELS[c.lead_stage] || c.lead_stage}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {c.last_seen_at
+                  ? `Visto: ${new Date(c.last_seen_at).toLocaleDateString("es-CL")}`
+                  : "Sin actividad"}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setEditing(c)}
+                  className="w-11 h-11 flex items-center justify-center hover:bg-blue-50 dark:hover:bg-sky-900/30 rounded-xl text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                  aria-label="Editar"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => deleteContact(c.id)}
+                  className="w-11 h-11 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                  aria-label="Eliminar"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop table view ───────────────────────────────────────── */}
+      <div className="hidden md:block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50">
@@ -210,7 +269,7 @@ export default function ContactsPage() {
                   type={type}
                   value={(editing[key] as string) || ""}
                   onChange={(e) => setEditing({ ...editing, [key]: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm
+                  className="w-full px-3.5 py-3 border border-slate-200 dark:border-slate-600 rounded-xl text-base md:text-sm
                     bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
                 />
@@ -220,14 +279,14 @@ export default function ContactsPage() {
           <div className="flex gap-2 mt-6">
             <button
               onClick={() => setEditing(null)}
-              className="flex-1 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm
-                text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium"
+              className="flex-1 py-3 border border-slate-200 dark:border-slate-600 rounded-xl text-sm
+                text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer font-medium min-h-[44px]"
             >
               Cancelar
             </button>
             <button
               onClick={saveEdit}
-              className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+              className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm min-h-[44px]"
             >
               Guardar cambios
             </button>

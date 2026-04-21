@@ -75,8 +75,8 @@ export default function LeadsPage() {
     .reduce((s, l) => s + (l.estimated_value || 0), 0);
 
   if (loading) return (
-    <div className="flex gap-3 animate-pulse">
-      {STAGES.map((_, i) => <div key={i} className="flex-1 h-96 bg-slate-200 dark:bg-slate-700 rounded-xl" />)}
+    <div className="flex gap-3 overflow-x-auto pb-3 animate-pulse">
+      {STAGES.map((_, i) => <div key={i} className="flex-shrink-0 w-56 h-96 bg-slate-200 dark:bg-slate-700 rounded-xl" />)}
     </div>
   );
 

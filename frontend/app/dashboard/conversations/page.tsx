@@ -15,6 +15,7 @@ import {
   Link2,
   Copy,
   Check,
+  ArrowLeft,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -85,7 +86,7 @@ const AVATAR_PALETTE = [
   "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-300",
 ];
 
-// ─── Helpers (sin cambios) ───────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name: string | null, phone: string) {
   if (name) {
@@ -106,12 +107,8 @@ function getAvatarColor(str: string) {
 
 function PipelineBar({ conversations }: { conversations: Conversation[] }) {
   const total = conversations.length;
-  const aiActive = conversations.filter(
-    (c) => c.status === "ai_handling"
-  ).length;
-  const withAgent = conversations.filter(
-    (c) => c.status === "human_assigned"
-  ).length;
+  const aiActive = conversations.filter((c) => c.status === "ai_handling").length;
+  const withAgent = conversations.filter((c) => c.status === "human_assigned").length;
   const closed = conversations.filter((c) => c.status === "closed").length;
 
   const metrics = [
@@ -162,17 +159,17 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
   ];
 
   return (
-    <div className="flex gap-3">
+    <div className="grid grid-cols-2 md:flex gap-2 md:gap-3">
       {metrics.map(({ label, value, valueColor, labelColor, bg, border, Icon, iconColor, iconBg }) => (
         <div
           key={label}
-          className={`flex-1 flex items-center gap-4 px-5 py-3.5 rounded-xl border ${bg} ${border}`}
+          className={`flex items-center gap-3 md:gap-4 px-3.5 md:px-5 py-3 md:py-3.5 rounded-xl border flex-1 ${bg} ${border}`}
         >
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
             <Icon className={`w-4 h-4 ${iconColor}`} />
           </div>
           <div>
-            <p className={`text-2xl font-bold leading-none tracking-tight ${valueColor}`}>
+            <p className={`text-xl md:text-2xl font-bold leading-none tracking-tight ${valueColor}`}>
               {value}
             </p>
             <p className={`text-[11px] font-medium mt-0.5 ${labelColor}`}>{label}</p>
@@ -184,8 +181,6 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
 }
 
 // ─── Deep-link helper ────────────────────────────────────────────────────────
-// Reads ?id= from URL on mount and opens that conversation automatically.
-// Wrapped in <Suspense> by the caller (required by useSearchParams in Next.js 15).
 
 function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
   const searchParams = useSearchParams();
@@ -200,7 +195,6 @@ function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConversationsPage() {
-  // ── Estado (sin cambios) ──────────────────────────────────────────────────
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<ConvDetail | null>(null);
   const [leadInfo, setLeadInfo] = useState<LeadInfo | null>(null);
@@ -219,12 +213,10 @@ export default function ConversationsPage() {
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
-  // Clear notification badge on mount
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("vt-badge-clear"));
   }, []);
 
-  // Polling de la lista de conversaciones (10s)
   useEffect(() => {
     const params = filter !== "all" ? { status: filter } : undefined;
     conversationsApi.list(params).then((r) => setConversations(r.data));
@@ -234,7 +226,6 @@ export default function ConversationsPage() {
     return () => clearInterval(interval);
   }, [filter]);
 
-  // Carga inicial al abrir una conversación
   useEffect(() => {
     if (selected) {
       conversationsApi.get(selected.id).then((r) => setSelected(r.data));
@@ -250,7 +241,6 @@ export default function ConversationsPage() {
     }
   }, [selected?.id]);
 
-  // Polling de mensajes de la conversación activa (5s)
   useEffect(() => {
     if (!selected) return;
     const id = selected.id;
@@ -264,10 +254,18 @@ export default function ConversationsPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selected?.messages]);
 
-  // ── Handlers (sin cambios) ────────────────────────────────────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const openConversation = async (id: string) => {
     const r = await conversationsApi.get(id);
     setSelected(r.data);
+  };
+
+  const goBackToList = () => {
+    setSelected(null);
+    setLeadInfo(null);
+    setTrackingLinks([]);
+    setShowTrackingModal(false);
   };
 
   const sendReply = async () => {
@@ -297,10 +295,7 @@ export default function ConversationsPage() {
   const handleClose = async () => {
     if (!selected) return;
     await conversationsApi.close(selected.id);
-    setSelected(null);
-    setLeadInfo(null);
-    setTrackingLinks([]);
-    setShowTrackingModal(false);
+    goBackToList();
     const r = await conversationsApi.list();
     setConversations(r.data);
     toast.success("Conversación cerrada");
@@ -341,7 +336,6 @@ export default function ConversationsPage() {
   return (
     <div className="h-[calc(100vh-5rem)] flex flex-col gap-3">
 
-      {/* Deep-link opener (reads ?id= from URL) */}
       <Suspense fallback={null}>
         <DeepLinkOpener onOpen={openConversation} />
       </Suspense>
@@ -352,8 +346,11 @@ export default function ConversationsPage() {
       {/* Main layout */}
       <div className="flex flex-1 gap-3 overflow-hidden min-h-0">
 
-        {/* ── Sidebar: lista de conversaciones ─────────────────────────── */}
-        <div className="w-72 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+        {/* ── Conversations list ──────────────────────────────────────── */}
+        {/* On mobile: hidden when a conversation is selected */}
+        <div className={`flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden
+          ${selected ? "hidden md:flex" : "flex"}
+          w-full md:w-72 md:flex-shrink-0`}>
 
           {/* Header sidebar */}
           <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700/50">
@@ -365,7 +362,7 @@ export default function ConversationsPage() {
                 <button
                   key={f.key}
                   onClick={() => setFilter(f.key)}
-                  className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all duration-150 cursor-pointer ${
+                  className={`text-xs px-2.5 py-2 rounded-lg font-medium transition-all duration-150 cursor-pointer min-h-[36px] ${
                     filter === f.key
                       ? "bg-blue-600 text-white shadow-sm"
                       : "text-slate-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-slate-300"
@@ -397,7 +394,7 @@ export default function ConversationsPage() {
                 <button
                   key={conv.id}
                   onClick={() => openConversation(conv.id)}
-                  className={`w-full text-left px-4 py-3.5 transition-colors cursor-pointer border-l-2 ${
+                  className={`w-full text-left px-4 py-4 transition-colors cursor-pointer border-l-2 min-h-[72px] ${
                     isActive
                       ? "bg-blue-50 dark:bg-blue-600/10 border-blue-500"
                       : "border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.03]"
@@ -405,7 +402,7 @@ export default function ConversationsPage() {
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor}`}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor}`}
                     >
                       {initials}
                     </div>
@@ -422,8 +419,7 @@ export default function ConversationsPage() {
                         </p>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${
-                            STATUS_COLORS[conv.status] ||
-                            "bg-slate-100 text-slate-500"
+                            STATUS_COLORS[conv.status] || "bg-slate-100 text-slate-500"
                           }`}
                         >
                           {STATUS_LABELS[conv.status] || conv.status}
@@ -450,237 +446,245 @@ export default function ConversationsPage() {
 
         {/* ── Chat detalle + Lead panel ─────────────────────────────── */}
         {selected ? (
-        <>
-          <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+          <>
+            <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden min-w-0">
 
-            {/* Header chat */}
-            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between bg-white dark:bg-slate-900">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(
-                    selected.contact_phone
-                  )}`}
-                >
-                  {getInitials(selected.contact_name, selected.contact_phone)}
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-900 dark:text-slate-100 leading-tight">
-                    {selected.contact_name || selected.contact_phone}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-600">{selected.contact_phone}</p>
-                </div>
-              </div>
+              {/* Back button – mobile only */}
+              <button
+                onClick={goBackToList}
+                className="md:hidden flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer min-h-[44px]"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Conversaciones
+              </button>
 
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-[10px] px-2 py-1 rounded-full font-semibold ${
-                    STATUS_COLORS[selected.status] ||
-                    "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {STATUS_LABELS[selected.status] || selected.status}
-                </span>
-                {/* Botón tracking */}
-                <button
-                  onClick={() => setShowTrackingModal((v) => !v)}
-                  className={`relative flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer font-medium ${
-                    showTrackingModal
-                      ? "bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/30"
-                      : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-500/20"
-                  }`}
-                >
-                  <Link2 className="w-3 h-3" />
-                  Links
-                  {trackingLinks.filter((l) => l.converted).length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                      {trackingLinks.filter((l) => l.converted).length}
-                    </span>
-                  )}
-                </button>
-                {selected.status !== "human_assigned" && (
-                  <button
-                    onClick={handleAssign}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5
-                      bg-amber-50 text-amber-700 border border-amber-200
-                      dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20
-                      rounded-lg hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors cursor-pointer font-medium"
-                  >
-                    <UserCheck className="w-3 h-3" />
-                    Asignarme
-                  </button>
-                )}
-                <button
-                  onClick={handleClose}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5
-                    bg-slate-100 text-slate-600 border border-slate-200
-                    dark:bg-white/5 dark:text-slate-400 dark:border-white/10
-                    rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer font-medium"
-                >
-                  <X className="w-3 h-3" />
-                  Cerrar
-                </button>
-              </div>
-            </div>
-
-            {/* Panel de tracking (desplegable) */}
-            {showTrackingModal && (
-              <div className="border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 px-5 py-4 space-y-3">
-                <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                  <Link2 className="w-3 h-3" />
-                  Links de seguimiento
-                </p>
-                {/* Generador */}
-                <div className="flex gap-2">
-                  <input
-                    value={trackingUrl}
-                    onChange={(e) => setTrackingUrl(e.target.value)}
-                    placeholder="URL de destino (ej: https://tienda.cl/producto)"
-                    className="flex-1 text-xs px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                  />
-                  <input
-                    value={trackingLabel}
-                    onChange={(e) => setTrackingLabel(e.target.value)}
-                    placeholder="Etiqueta (opcional)"
-                    className="w-32 text-xs px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                  />
-                  <button
-                    onClick={generateTrackingLink}
-                    disabled={generatingLink || !trackingUrl.trim()}
-                    className="text-xs px-3 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors cursor-pointer font-medium whitespace-nowrap"
-                  >
-                    {generatingLink ? "..." : "Generar"}
-                  </button>
-                </div>
-                {/* Lista de links */}
-                {trackingLinks.length > 0 && (
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                    {trackingLinks.map((link) => (
-                      <div
-                        key={link.token}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60"
-                      >
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${link.converted ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
-                        <div className="flex-1 min-w-0">
-                          {link.label && (
-                            <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 truncate">{link.label}</p>
-                          )}
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">{link.tracking_url}</p>
-                        </div>
-                        {link.converted && (
-                          <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800 flex-shrink-0">
-                            Convertido
-                          </span>
-                        )}
-                        <button
-                          onClick={() => copyLink(link.tracking_url, link.token)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer flex-shrink-0"
-                        >
-                          {copiedToken === link.token ? (
-                            <Check className="w-3 h-3 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {trackingLinks.length === 0 && (
-                  <p className="text-xs text-slate-400 dark:text-slate-600">Aún no hay links generados para esta conversación.</p>
-                )}
-              </div>
-            )}
-
-            {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 bg-slate-50 dark:bg-slate-950/80">
-              {selected.messages.map((msg) => {
-                const isUser = msg.role === "user";
-                const isAI = msg.role === "assistant";
-                return (
+              {/* Header chat */}
+              <div className="px-4 md:px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between bg-white dark:bg-slate-900 gap-2 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
                   <div
-                    key={msg.id}
-                    className={`flex ${isUser ? "justify-start" : "justify-end"}`}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(
+                      selected.contact_phone
+                    )}`}
                   >
-                    <div
-                      className={`flex items-end gap-2 max-w-[72%] ${
-                        isUser ? "flex-row" : "flex-row-reverse"
-                      }`}
-                    >
-                      {/* Avatar mensaje */}
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          isUser
-                            ? "bg-slate-200 dark:bg-slate-700/60"
-                            : isAI
-                            ? "bg-indigo-100 dark:bg-indigo-900/60"
-                            : "bg-emerald-100 dark:bg-emerald-900/60"
-                        }`}
-                      >
-                        {isUser ? (
-                          <User className="w-3 h-3 text-gray-500 dark:text-slate-400" />
-                        ) : isAI ? (
-                          <Bot className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                        ) : (
-                          <UserCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                        )}
-                      </div>
+                    {getInitials(selected.contact_name, selected.contact_phone)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm text-gray-900 dark:text-slate-100 leading-tight truncate">
+                      {selected.contact_name || selected.contact_phone}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-600">{selected.contact_phone}</p>
+                  </div>
+                </div>
 
-                      {/* Burbuja */}
-                      <div
-                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                          isUser
-                            ? "bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700/60"
-                            : "bg-indigo-600 text-white rounded-br-sm shadow-lg shadow-indigo-900/20"
-                        }`}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className={`text-[10px] px-2 py-1 rounded-full font-semibold ${
+                      STATUS_COLORS[selected.status] || "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {STATUS_LABELS[selected.status] || selected.status}
+                  </span>
+                  {/* Botón tracking */}
+                  <button
+                    onClick={() => setShowTrackingModal((v) => !v)}
+                    className={`relative flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors cursor-pointer font-medium min-h-[36px] ${
+                      showTrackingModal
+                        ? "bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/30"
+                        : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-500/20"
+                    }`}
+                  >
+                    <Link2 className="w-3 h-3" />
+                    Links
+                    {trackingLinks.filter((l) => l.converted).length > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {trackingLinks.filter((l) => l.converted).length}
+                      </span>
+                    )}
+                  </button>
+                  {selected.status !== "human_assigned" && (
+                    <button
+                      onClick={handleAssign}
+                      className="flex items-center gap-1.5 text-xs px-3 py-2
+                        bg-amber-50 text-amber-700 border border-amber-200
+                        dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20
+                        rounded-lg hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors cursor-pointer font-medium min-h-[36px]"
+                    >
+                      <UserCheck className="w-3 h-3" />
+                      <span className="hidden sm:inline">Asignarme</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleClose}
+                    className="flex items-center gap-1.5 text-xs px-3 py-2
+                      bg-slate-100 text-slate-600 border border-slate-200
+                      dark:bg-white/5 dark:text-slate-400 dark:border-white/10
+                      rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer font-medium min-h-[36px]"
+                  >
+                    <X className="w-3 h-3" />
+                    <span className="hidden sm:inline">Cerrar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Panel de tracking */}
+              {showTrackingModal && (
+                <div className="border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 px-4 md:px-5 py-4 space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                    <Link2 className="w-3 h-3" />
+                    Links de seguimiento
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={trackingUrl}
+                      onChange={(e) => setTrackingUrl(e.target.value)}
+                      placeholder="URL de destino (ej: https://tienda.cl/producto)"
+                      className="flex-1 text-xs px-3 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-base sm:text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={trackingLabel}
+                        onChange={(e) => setTrackingLabel(e.target.value)}
+                        placeholder="Etiqueta (opcional)"
+                        className="flex-1 sm:w-32 text-xs px-3 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-base sm:text-xs"
+                      />
+                      <button
+                        onClick={generateTrackingLink}
+                        disabled={generatingLink || !trackingUrl.trim()}
+                        className="text-xs px-3 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors cursor-pointer font-medium whitespace-nowrap min-h-[44px]"
                       >
-                        {msg.content}
-                      </div>
+                        {generatingLink ? "..." : "Generar"}
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-              <div ref={bottomRef} />
+                  {trackingLinks.length > 0 && (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {trackingLinks.map((link) => (
+                        <div
+                          key={link.token}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60"
+                        >
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${link.converted ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                          <div className="flex-1 min-w-0">
+                            {link.label && (
+                              <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 truncate">{link.label}</p>
+                            )}
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">{link.tracking_url}</p>
+                          </div>
+                          {link.converted && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800 flex-shrink-0">
+                              Convertido
+                            </span>
+                          )}
+                          <button
+                            onClick={() => copyLink(link.tracking_url, link.token)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer flex-shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                          >
+                            {copiedToken === link.token ? (
+                              <Check className="w-3 h-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {trackingLinks.length === 0 && (
+                    <p className="text-xs text-slate-400 dark:text-slate-600">Aún no hay links generados para esta conversación.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Mensajes */}
+              <div className="flex-1 overflow-y-auto px-4 md:px-5 py-5 space-y-4 bg-slate-50 dark:bg-slate-950/80">
+                {selected.messages.map((msg) => {
+                  const isUser = msg.role === "user";
+                  const isAI = msg.role === "assistant";
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isUser ? "justify-start" : "justify-end"}`}
+                    >
+                      <div
+                        className={`flex items-end gap-2 max-w-[85%] md:max-w-[72%] ${
+                          isUser ? "flex-row" : "flex-row-reverse"
+                        }`}
+                      >
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isUser
+                              ? "bg-slate-200 dark:bg-slate-700/60"
+                              : isAI
+                              ? "bg-indigo-100 dark:bg-indigo-900/60"
+                              : "bg-emerald-100 dark:bg-emerald-900/60"
+                          }`}
+                        >
+                          {isUser ? (
+                            <User className="w-3 h-3 text-gray-500 dark:text-slate-400" />
+                          ) : isAI ? (
+                            <Bot className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          ) : (
+                            <UserCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          )}
+                        </div>
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                            isUser
+                              ? "bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700/60"
+                              : "bg-indigo-600 text-white rounded-br-sm shadow-lg shadow-indigo-900/20"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={bottomRef} />
+              </div>
+
+              {/* Input respuesta */}
+              {selected.status !== "closed" && (
+                <div className="px-4 py-3.5 border-t border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendReply()}
+                    placeholder="Responder como agente…"
+                    className="flex-1 text-sm px-4 py-3
+                      bg-slate-100 border border-slate-200 text-slate-800
+                      dark:bg-slate-800 dark:border-slate-700/60 dark:text-slate-200
+                      rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500
+                      placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-shadow
+                      text-base md:text-sm"
+                  />
+                  <button
+                    onClick={sendReply}
+                    disabled={sending || !replyText.trim()}
+                    className="bg-indigo-600 text-white px-3.5 py-3 rounded-xl hover:bg-indigo-500 disabled:opacity-30 transition-colors cursor-pointer shadow-sm shadow-indigo-900/30 min-h-[48px] min-w-[48px] flex items-center justify-center"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Input respuesta manual */}
-            {selected.status !== "closed" && (
-              <div className="px-4 py-3.5 border-t border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendReply()}
-                  placeholder="Responder como agente…"
-                  className="flex-1 text-sm px-4 py-2.5
-                    bg-slate-100 border border-slate-200 text-slate-800
-                    dark:bg-slate-800 dark:border-slate-700/60 dark:text-slate-200
-                    rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500
-                    placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-shadow"
+            {/* Lead pipeline panel – hidden on mobile */}
+            {leadInfo && (
+              <div className="hidden lg:flex flex-shrink-0">
+                <LeadPanel
+                  lead={leadInfo}
+                  onLeadChange={(updated) =>
+                    setLeadInfo((prev) => prev ? { ...prev, ...updated } : prev)
+                  }
                 />
-                <button
-                  onClick={sendReply}
-                  disabled={sending || !replyText.trim()}
-                  className="bg-indigo-600 text-white px-3.5 py-2.5 rounded-xl hover:bg-indigo-500 disabled:opacity-30 transition-colors cursor-pointer shadow-sm shadow-indigo-900/30"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
               </div>
             )}
-          </div>
-
-          {/* Lead pipeline panel */}
-          {leadInfo && (
-            <LeadPanel
-              lead={leadInfo}
-              onLeadChange={(updated) =>
-                setLeadInfo((prev) => prev ? { ...prev, ...updated } : prev)
-              }
-            />
-          )}
-        </>
+          </>
         ) : (
-          /* Estado vacío */
-          <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 flex flex-col items-center justify-center gap-4">
+          /* Empty state – desktop only */
+          <div className="hidden md:flex flex-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 flex-col items-center justify-center gap-4">
             <div className="w-14 h-14 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center justify-center">
               <MessageSquare className="w-7 h-7 text-slate-400 dark:text-slate-600" />
             </div>

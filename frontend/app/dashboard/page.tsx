@@ -56,25 +56,25 @@ export default function DashboardPage() {
   const wonLeads = leads["closed_won"] || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 md:space-y-6">
 
       {/* Hero card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-7 text-white shadow-lg">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-5 md:p-7 text-white shadow-lg">
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/3 translate-x-1/3" />
         <div className="absolute bottom-0 left-1/2 w-96 h-32 rounded-full bg-indigo-800/40 translate-y-1/2" />
 
-        <div className="relative flex items-start justify-between">
-          <div>
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-blue-200 text-sm font-medium mb-1">Bienvenido de vuelta</p>
-            <h1 className="text-2xl font-bold tracking-tight">{business?.name || "Tu negocio"}</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight truncate">{business?.name || "Tu negocio"}</h1>
             <p className="text-blue-200 text-sm mt-1">Resumen del mes actual</p>
           </div>
-          <span className="bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full capitalize">
+          <span className="flex-shrink-0 bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full capitalize">
             {business?.plan || "plan"}
           </span>
         </div>
 
-        <div className="relative grid grid-cols-3 gap-4 mt-7">
+        <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 md:mt-7">
           {[
             { label: "Conversaciones este mes", value: conversations.this_month },
             { label: "Leads totales",           value: totalLeads },
@@ -89,7 +89,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kpis.map((kpi) => (
           <KPICard key={kpi.label} {...kpi} />
         ))}
@@ -99,8 +99,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* Line chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-5 md:p-6">
+          <div className="flex items-center justify-between mb-5 md:mb-6">
             <div>
               <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Conversaciones</h2>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Últimos 30 días</p>
@@ -110,43 +110,52 @@ export default function DashboardPage() {
               Este mes
             </div>
           </div>
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ fontFamily: "Plus Jakarta Sans", fontSize: 12, borderRadius: 10, border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }} cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }} />
-                <Line type="monotone" dataKey="conversations" stroke="#2563EB" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: "#2563EB" }} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[180px] flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 gap-2">
-              <MessageSquare className="w-8 h-8 opacity-30" />
-              <p className="text-sm font-medium">Sin datos aún</p>
+          {/* Horizontal scroll on mobile */}
+          <div className="overflow-x-auto -mx-1">
+            <div className="min-w-[280px]">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontFamily: "Plus Jakarta Sans", fontSize: 12, borderRadius: 10, border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }} cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }} />
+                    <Line type="monotone" dataKey="conversations" stroke="#2563EB" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: "#2563EB" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[180px] flex flex-col items-center justify-center text-slate-300 dark:text-slate-600 gap-2">
+                  <MessageSquare className="w-8 h-8 opacity-30" />
+                  <p className="text-sm font-medium">Sin datos aún</p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Funnel bar chart */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-6">
-          <div className="mb-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-sm p-5 md:p-6">
+          <div className="mb-5 md:mb-6">
             <h2 className="text-sm font-bold text-gray-900 dark:text-slate-100">Pipeline de leads</h2>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Por etapa</p>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={funnelData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }} barSize={14}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontFamily: "Plus Jakarta Sans", fontSize: 12, borderRadius: 10, border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }} cursor={{ fill: "#F8FAFC" }} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                {funnelData.map((entry) => (
-                  <Cell key={entry.key} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="overflow-x-auto -mx-1">
+            <div className="min-w-[240px]">
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={funnelData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }} barSize={14}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "#94A3B8", fontFamily: "Plus Jakarta Sans" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ fontFamily: "Plus Jakarta Sans", fontSize: 12, borderRadius: 10, border: "1px solid #E2E8F0", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }} cursor={{ fill: "#F8FAFC" }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {funnelData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -156,13 +165,13 @@ export default function DashboardPage() {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-44 bg-gradient-to-br from-blue-200 to-indigo-200 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-2xl" />
-      <div className="grid grid-cols-3 gap-4">
+    <div className="space-y-5 md:space-y-6 animate-pulse">
+      <div className="h-40 md:h-44 bg-gradient-to-br from-blue-200 to-indigo-200 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-2xl" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[...Array(6)].map((_, i) => <div key={i} className="h-24 bg-slate-200 dark:bg-slate-700/50 rounded-xl" />)}
       </div>
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-2 h-64 bg-slate-200 dark:bg-slate-700/50 rounded-xl" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 h-64 bg-slate-200 dark:bg-slate-700/50 rounded-xl" />
         <div className="h-64 bg-slate-200 dark:bg-slate-700/50 rounded-xl" />
       </div>
     </div>
