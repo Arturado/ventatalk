@@ -13,6 +13,7 @@ import toast from "react-hot-toast";
 import { analyticsApi, businessApi, billingApi, type UsageData } from "@/lib/api";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { PlanUsageCard } from "@/components/dashboard/PlanUsageCard";
+import { EmbeddedCheckoutModal } from "@/components/dashboard/EmbeddedCheckoutModal";
 import { useAuthStore } from "@/lib/store";
 
 interface Overview {
@@ -35,6 +36,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [chartData, setChartData] = useState<{ date: string; conversations: number }[]>([]);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
+  const [bannerClientSecret, setBannerClientSecret] = useState<string | null>(null);
   const { business } = useAuthStore();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -80,7 +82,7 @@ export default function DashboardPage() {
     const next = usageData.plan === "starter" ? "pro" : "business";
     try {
       const res = await billingApi.createCheckoutSession(next);
-      window.location.href = res.data.checkout_url;
+      setBannerClientSecret(res.data.client_secret);
     } catch {
       toast.error("Error al iniciar el pago. Inténtalo de nuevo.");
     }
@@ -232,6 +234,17 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <PlanUsageCard usage={usageData} />
         </div>
+      )}
+
+      {bannerClientSecret && (
+        <EmbeddedCheckoutModal
+          clientSecret={bannerClientSecret}
+          onClose={() => setBannerClientSecret(null)}
+          onComplete={() => {
+            toast.success("¡Plan actualizado correctamente!");
+            setBannerClientSecret(null);
+          }}
+        />
       )}
 
     </div>
