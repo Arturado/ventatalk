@@ -185,6 +185,18 @@ export const analyticsApi = {
 
 // ─── Business ─────────────────────────────────────────────────────────────────
 
+export interface UsageData {
+  plan: string;
+  conversations_this_month: number;
+  conversations_limit: number;
+  conversations_pct: number;
+  channels_used: number;
+  channels_limit: number;
+  catalog_items: number;
+  catalog_limit: number;
+  days_until_reset: number;
+}
+
 export const businessApi = {
   uploadCatalog: (file: File) => {
     const form = new FormData();
@@ -195,6 +207,7 @@ export const businessApi = {
   },
   getCatalog:    () => api.get("/api/v1/business/catalog"),
   updateProfile: (data: object) => api.put("/api/v1/business/profile", data),
+  usage:         () => api.get<UsageData>("/api/v1/business/usage"),
 };
 
 export default api;

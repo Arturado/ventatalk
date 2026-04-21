@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard, MessageSquare, Users,
   TrendingUp, Settings, LogOut, Bot, Zap, X,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
+import { businessApi, type UsageData } from "@/lib/api";
 
 const NAV_GROUPS = [
   {
@@ -34,6 +36,11 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { business, logout } = useAuthStore();
+  const [usage, setUsage] = useState<UsageData | null>(null);
+
+  useEffect(() => {
+    businessApi.usage().then((r) => setUsage(r.data)).catch(() => {});
+  }, []);
 
   return (
     <>
@@ -128,6 +135,24 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <Zap className="w-3 h-3" />
                 <span className="capitalize">{business.plan}</span>
               </span>
+              {usage && usage.conversations_limit !== -1 && (
+                <div className="mt-2.5">
+                  <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mb-1">
+                    <span>Conversaciones</span>
+                    <span>{usage.conversations_this_month}/{usage.conversations_limit}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1">
+                    <div
+                      className={`h-1 rounded-full transition-all ${
+                        usage.conversations_pct >= 95 ? "bg-red-500" :
+                        usage.conversations_pct >= 80 ? "bg-amber-400" :
+                        "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.min(100, usage.conversations_pct)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <button

@@ -8,8 +8,9 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts";
-import { analyticsApi } from "@/lib/api";
+import { analyticsApi, businessApi, type UsageData } from "@/lib/api";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { PlanUsageCard } from "@/components/dashboard/PlanUsageCard";
 import { useAuthStore } from "@/lib/store";
 
 interface Overview {
@@ -31,11 +32,13 @@ const FUNNEL_STAGES = [
 export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [chartData, setChartData] = useState<{ date: string; conversations: number }[]>([]);
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
   const { business } = useAuthStore();
 
   useEffect(() => {
     analyticsApi.overview().then((r) => setOverview(r.data));
     analyticsApi.conversations(30).then((r) => setChartData(r.data));
+    businessApi.usage().then((r) => setUsageData(r.data)).catch(() => {});
   }, []);
 
   if (!overview) return <LoadingSkeleton />;
@@ -55,8 +58,51 @@ export default function DashboardPage() {
   const totalLeads = funnelData.reduce((s, f) => s + f.count, 0);
   const wonLeads = leads["closed_won"] || 0;
 
+  const convPct = usageData?.conversations_pct ?? 0;
+  const convLimited = usageData && usageData.conversations_limit !== -1;
+
   return (
     <div className="space-y-5 md:space-y-6">
+
+      {/* Plan limit banners */}
+      {convLimited && convPct >= 100 && (
+        <div className="flex items-start gap-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 px-4 py-3.5">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400">Límite de conversaciones alcanzado</p>
+            <p className="text-xs text-red-600 dark:text-red-400/80 mt-0.5">
+              Has usado el 100% de tus conversaciones este mes. Los mensajes entrantes están bloqueados hasta el próximo ciclo o al mejorar tu plan.
+            </p>
+          </div>
+          <a
+            href="https://ventatalk.com/pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Mejorar plan
+          </a>
+        </div>
+      )}
+      {convLimited && convPct >= 90 && convPct < 100 && (
+        <div className="flex items-start gap-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3.5">
+          <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Estás usando el {convPct}% de tus conversaciones</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400/80 mt-0.5">
+              Te quedan {(usageData!.conversations_limit - usageData!.conversations_this_month).toLocaleString()} conversaciones disponibles este mes. Mejora tu plan para evitar interrupciones.
+            </p>
+          </div>
+          <a
+            href="https://ventatalk.com/pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Mejorar plan
+          </a>
+        </div>
+      )}
 
       {/* Hero card */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 p-5 md:p-7 text-white shadow-lg">
@@ -159,6 +205,14 @@ export default function DashboardPage() {
         </div>
 
       </div>
+
+      {/* Plan usage */}
+      {usageData && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <PlanUsageCard usage={usageData} />
+        </div>
+      )}
+
     </div>
   );
 }

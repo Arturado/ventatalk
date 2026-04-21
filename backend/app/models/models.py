@@ -115,6 +115,7 @@ class Business(Base, UUIDMixin, TimestampMixin):
     # Meta: límites según plan
     max_phone_numbers: Mapped[int] = mapped_column(Integer, default=1)
     max_conversations_per_month: Mapped[int] = mapped_column(Integer, default=500)
+    max_catalog_items: Mapped[int] = mapped_column(Integer, default=50)
 
     # Integraciones externas (jumpseller, bsale, shopify, etc.)
     integrations: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)

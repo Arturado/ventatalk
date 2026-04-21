@@ -9,18 +9,55 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_business
-from app.models.models import Business, CatalogItem
+from app.core.plan_limits import (
+    conversations_this_month, catalog_items_count, days_until_reset,
+)
+from app.models.models import Business, CatalogItem, PhoneNumber
 from app.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/business", tags=["business"])
 
 VALID_SOURCES = {"csv", "jumpseller", "bsale", "shopify", "woocommerce"}
+
+
+@router.get("/usage")
+async def get_usage(
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """Uso actual del plan: conversaciones, canales y catálogo."""
+    conv_count = await conversations_this_month(db, business.id)
+
+    channels_result = await db.execute(
+        select(func.count()).select_from(PhoneNumber)
+        .where(PhoneNumber.business_id == business.id, PhoneNumber.is_active == True)
+    )
+    channels_used = channels_result.scalar() or 0
+
+    cat_count = await catalog_items_count(db, business.id)
+
+    conv_limit = business.max_conversations_per_month
+    conv_pct = round(conv_count / conv_limit * 100) if conv_limit > 0 and conv_limit != -1 else 0
+
+    plan_value = business.plan.value if hasattr(business.plan, "value") else str(business.plan)
+
+    return {
+        "plan": plan_value,
+        "conversations_this_month": conv_count,
+        "conversations_limit": conv_limit,
+        "conversations_pct": conv_pct,
+        "channels_used": channels_used,
+        "channels_limit": business.max_phone_numbers,
+        "catalog_items": cat_count,
+        "catalog_limit": business.max_catalog_items,
+        "days_until_reset": days_until_reset(),
+    }
 
 
 class CatalogItemOut(BaseModel):
@@ -140,6 +177,16 @@ async def upload_catalog(
     if "name" not in (reader.fieldnames or []):
         raise HTTPException(400, "El CSV debe tener columna 'name'")
 
+    rows_list = list(reader)
+    valid_count = sum(1 for row in rows_list if row.get("name", "").strip())
+    if business.max_catalog_items != -1 and valid_count > business.max_catalog_items:
+        raise HTTPException(
+            403,
+            f"Tu plan permite máximo {business.max_catalog_items} productos en el catálogo. "
+            f"Tu archivo tiene {valid_count} productos válidos. "
+            "Actualiza tu plan para subir catálogos más grandes."
+        )
+
     # Limpiar productos de otras fuentes al subir CSV
     result = await db.execute(
         select(CatalogItem).where(
@@ -168,7 +215,7 @@ async def upload_catalog(
     items_created = 0
     errors = []
 
-    for i, row in enumerate(reader):
+    for i, row in enumerate(rows_list):
         name = row.get("name", "").strip()
         if not name:
             continue

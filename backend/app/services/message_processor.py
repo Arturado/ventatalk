@@ -79,6 +79,23 @@ async def _process(message: dict, phone_number_id: str, contacts_info: list) -> 
         if not business.is_active or not business.ai_enabled:
             return
 
+        # ── 2.5. Verificar límite de conversaciones del plan ─────────
+        from app.core.plan_limits import is_conversation_limit_exceeded
+        if await is_conversation_limit_exceeded(db, business):
+            logger.info(f"Business {business.id}: límite de conversaciones alcanzado, mensaje bloqueado")
+            wa_service = WhatsAppService(
+                phone_number_id=phone_number_id,
+                access_token=phone_record.access_token,
+            )
+            await wa_service.send_text(
+                to=from_phone,
+                text=(
+                    "Lo sentimos, este servicio se encuentra temporalmente suspendido. "
+                    "Por favor contacta directamente al negocio para más información."
+                ),
+            )
+            return
+
         # ── 3. Upsert Contact ────────────────────────────────────────
         contact = await _upsert_contact(db, business.id, from_phone, contacts_info)
 
