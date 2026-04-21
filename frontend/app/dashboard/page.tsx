@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   MessageSquare, Users, TrendingUp, DollarSign,
@@ -32,7 +32,7 @@ const FUNNEL_STAGES = [
   { key: "closed_lost", label: "Perdidos",    color: "#F87171" },
 ];
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [chartData, setChartData] = useState<{ date: string; conversations: number }[]>([]);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
@@ -248,6 +248,14 @@ export default function DashboardPage() {
       )}
 
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 
