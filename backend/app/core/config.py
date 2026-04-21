@@ -1,4 +1,6 @@
 from functools import lru_cache
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +36,10 @@ class Settings(BaseSettings):
 
     # Frontend
     NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
+
+    # Chat widget público
+    WIDGET_BUSINESS_ID: Optional[str] = None
+    WIDGET_ORIGIN: str = "https://ventatalk.com"
 
     @property
     def is_production(self) -> bool:
