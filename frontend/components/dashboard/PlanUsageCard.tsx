@@ -4,6 +4,7 @@ import { ArrowUpRight, Zap, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { UsageData } from "@/lib/api";
 import { billingApi } from "@/lib/api";
+import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal";
 
 const PLAN_STYLES: Record<string, string> = {
   starter: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20",
@@ -39,6 +40,7 @@ const NEXT_PLAN_LABEL: Record<string, string> = {
 
 export function PlanUsageCard({ usage }: { usage: UsageData }) {
   const [upgrading, setUpgrading] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const badgeStyle = PLAN_STYLES[usage.plan] ?? PLAN_STYLES.starter;
   const convUnlimited = usage.conversations_limit === -1;
   const channelsUnlimited = usage.channels_limit === -1;
@@ -50,11 +52,17 @@ export function PlanUsageCard({ usage }: { usage: UsageData }) {
     setUpgrading(true);
     try {
       const res = await billingApi.createCheckoutSession(nextPlan);
-      window.location.href = res.data.checkout_url;
+      setClientSecret(res.data.client_secret);
     } catch {
       toast.error("Error al iniciar el pago. Inténtalo de nuevo.");
+    } finally {
       setUpgrading(false);
     }
+  };
+
+  const handleCheckoutComplete = () => {
+    toast.success("¡Plan actualizado correctamente!");
+    setClientSecret(null);
   };
 
   return (
@@ -140,6 +148,14 @@ export function PlanUsageCard({ usage }: { usage: UsageData }) {
             </>
           )}
         </button>
+      )}
+
+      {clientSecret && (
+        <EmbeddedCheckoutModal
+          clientSecret={clientSecret}
+          onClose={() => setClientSecret(null)}
+          onComplete={handleCheckoutComplete}
+        />
       )}
     </div>
   );

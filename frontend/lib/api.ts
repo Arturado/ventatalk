@@ -201,7 +201,7 @@ export interface UsageData {
 
 export const billingApi = {
   createCheckoutSession: (plan: string) =>
-    api.post<{ checkout_url: string }>("/api/v1/billing/create-checkout-session", { plan }),
+    api.post<{ client_secret: string }>("/api/v1/billing/create-checkout-session", { plan }),
   getPortalUrl: () =>
     api.get<{ portal_url: string }>("/api/v1/billing/portal"),
 };

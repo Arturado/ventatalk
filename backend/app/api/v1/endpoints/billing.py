@@ -48,7 +48,7 @@ async def create_checkout_session(
     body: CheckoutRequest,
     business: Business = Depends(get_current_business),
 ):
-    """Crea una Stripe Checkout Session y devuelve la URL de pago."""
+    """Crea una Stripe Embedded Checkout Session y devuelve el client_secret."""
     plan = body.plan.lower()
     price_id = _plan_to_price().get(plan)
     if not price_id:
@@ -56,18 +56,18 @@ async def create_checkout_session(
 
     try:
         session = stripe.checkout.Session.create(
+            ui_mode="embedded",
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
             customer_email=business.email,
-            success_url="https://app.ventatalk.com/dashboard?upgraded=true",
-            cancel_url="https://app.ventatalk.com/dashboard",
+            return_url="https://app.ventatalk.com/dashboard?upgraded=true",
             metadata={"business_id": str(business.id)},
         )
     except stripe.StripeError as e:
         logger.error("Stripe error creating checkout session: %s", e)
         raise HTTPException(status_code=502, detail="Error al conectar con Stripe")
 
-    return {"checkout_url": session.url}
+    return {"client_secret": session.client_secret}
 
 
 @router.post("/webhook", include_in_schema=False)
