@@ -227,32 +227,32 @@ export default function ConversationsPage() {
   }, [filter]);
 
   useEffect(() => {
-    if (selected) {
-      conversationsApi.get(selected.id).then((r) => setSelected(r.data));
-      contactsApi.get(selected.contact_id).then((r) => {
-        setLeadInfo({
-          lead_id: r.data.lead_id ?? null,
-          lead_stage: r.data.lead_stage ?? null,
-          lead_estimated_value: r.data.lead_estimated_value ?? null,
-          contact_id: selected.contact_id,
-        });
-      });
-      trackingApi.listLinks(selected.id).then((r) => setTrackingLinks(r.data));
-    }
-  }, [selected?.id]);
-
-  useEffect(() => {
     if (!selected) return;
+
     const id = selected.id;
+    const contactId = selected.contact_id;
+
+    conversationsApi.get(id).then((r) => setSelected(r.data));
+    contactsApi.get(contactId).then((r) => {
+      setLeadInfo({
+        lead_id: r.data.lead_id ?? null,
+        lead_stage: r.data.lead_stage ?? null,
+        lead_estimated_value: r.data.lead_estimated_value ?? null,
+        contact_id: contactId,
+      });
+    });
+    trackingApi.listLinks(id).then((r) => setTrackingLinks(r.data));
+
     const interval = setInterval(() => {
       conversationsApi.get(id).then((r) => setSelected(r.data));
     }, 5000);
     return () => clearInterval(interval);
   }, [selected?.id]);
 
+  const lastMessageId = selected?.messages?.at(-1)?.id;
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selected?.messages]);
+  }, [lastMessageId]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 

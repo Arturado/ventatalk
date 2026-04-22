@@ -55,6 +55,8 @@ services:
     env_file: .env
     ports:
       - "3000:3000"
+    mem_limit: 512m
+    cpus: "1.0"
 
 volumes:
   postgres_data:

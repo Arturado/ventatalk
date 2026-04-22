@@ -156,7 +156,10 @@ export function useNotifications(): UseNotificationsReturn {
 
   // Start / stop polling when enabled changes
   useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
     if (enabled && permission === "granted") {
       poll();
@@ -164,7 +167,10 @@ export function useNotifications(): UseNotificationsReturn {
     }
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   }, [enabled, permission, poll]);
 
