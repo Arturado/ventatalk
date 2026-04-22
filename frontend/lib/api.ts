@@ -121,8 +121,8 @@ export const authApi = {
 // ─── Conversations ─────────────────────────────────────────────────────────────
 
 export const conversationsApi = {
-  list:   (params?: { status?: string; page?: number }) => api.get("/api/v1/conversations", { params }),
-  get:    (id: string) => api.get(`/api/v1/conversations/${id}`),
+  list:   (params?: { status?: string; page?: number }, signal?: AbortSignal) => api.get("/api/v1/conversations", { params, signal }),
+  get:    (id: string, signal?: AbortSignal) => api.get(`/api/v1/conversations/${id}`, { signal }),
   reply:  (id: string, text: string) => api.post(`/api/v1/conversations/${id}/reply`, { text }),
   assign: (id: string) => api.put(`/api/v1/conversations/${id}/assign`),
   close:  (id: string) => api.put(`/api/v1/conversations/${id}/close`),
@@ -132,7 +132,7 @@ export const conversationsApi = {
 
 export const contactsApi = {
   list:   (params?: { page?: number; search?: string }) => api.get("/api/v1/contacts", { params }),
-  get:    (id: string) => api.get(`/api/v1/contacts/${id}`),
+  get:    (id: string, signal?: AbortSignal) => api.get(`/api/v1/contacts/${id}`, { signal }),
   update: (id: string, data: object) => api.patch(`/api/v1/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/api/v1/contacts/${id}`),
 };
@@ -172,8 +172,8 @@ export const phoneNumbersApi = {
 export const trackingApi = {
   createLink: (conversationId: string, data: { destination_url: string; label?: string }) =>
     api.post(`/api/v1/conversations/${conversationId}/tracking-link`, data),
-  listLinks:  (conversationId: string) =>
-    api.get(`/api/v1/conversations/${conversationId}/tracking-links`),
+  listLinks:  (conversationId: string, signal?: AbortSignal) =>
+    api.get(`/api/v1/conversations/${conversationId}/tracking-links`, { signal }),
 };
 
 // ─── Analytics ────────────────────────────────────────────────────────────────

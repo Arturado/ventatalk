@@ -180,6 +180,11 @@ function PipelineBar({ conversations }: { conversations: Conversation[] }) {
   );
 }
 
+// Evita acumulación de mensajes — retiene solo los últimos 100
+function limitMessages(conv: ConvDetail): ConvDetail {
+  return { ...conv, messages: conv.messages.slice(-100) };
+}
+
 // ─── Deep-link helper ────────────────────────────────────────────────────────
 
 function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
@@ -210,6 +215,7 @@ export default function ConversationsPage() {
   const [trackingLabel, setTrackingLabel] = useState("");
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -218,36 +224,55 @@ export default function ConversationsPage() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const params = filter !== "all" ? { status: filter } : undefined;
-    conversationsApi.list(params).then((r) => setConversations(r.data));
+
+    conversationsApi.list(params, signal).then((r) => setConversations(r.data)).catch(() => {});
     const interval = setInterval(() => {
-      conversationsApi.list(params).then((r) => setConversations(r.data));
+      conversationsApi.list(params, signal).then((r) => setConversations(r.data)).catch(() => {});
     }, 10000);
-    return () => clearInterval(interval);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [filter]);
 
   useEffect(() => {
     if (!selected) return;
 
+    const controller = new AbortController();
+    const { signal } = controller;
     const id = selected.id;
     const contactId = selected.contact_id;
 
-    conversationsApi.get(id).then((r) => setSelected(r.data));
-    contactsApi.get(contactId).then((r) => {
+    conversationsApi.get(id, signal).then((r) => setSelected(limitMessages(r.data))).catch(() => {});
+    contactsApi.get(contactId, signal).then((r) => {
       setLeadInfo({
         lead_id: r.data.lead_id ?? null,
         lead_stage: r.data.lead_stage ?? null,
         lead_estimated_value: r.data.lead_estimated_value ?? null,
         contact_id: contactId,
       });
-    });
-    trackingApi.listLinks(id).then((r) => setTrackingLinks(r.data));
+    }).catch(() => {});
+    trackingApi.listLinks(id, signal).then((r) => setTrackingLinks(r.data)).catch(() => {});
 
     const interval = setInterval(() => {
-      conversationsApi.get(id).then((r) => setSelected(r.data));
+      conversationsApi.get(id, signal).then((r) => setSelected(limitMessages(r.data))).catch(() => {});
     }, 5000);
-    return () => clearInterval(interval);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [selected?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const lastMessageId = selected?.messages?.at(-1)?.id;
   useEffect(() => {
@@ -309,7 +334,7 @@ export default function ConversationsPage() {
         destination_url: trackingUrl.trim(),
         label: trackingLabel.trim() || undefined,
       });
-      setTrackingLinks((prev) => [res.data, ...prev]);
+      setTrackingLinks((prev) => [res.data, ...prev].slice(0, 50));
       setTrackingUrl("");
       setTrackingLabel("");
       toast.success("Link generado");
@@ -322,8 +347,9 @@ export default function ConversationsPage() {
 
   const copyLink = (url: string, token: string) => {
     navigator.clipboard.writeText(url);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     setCopiedToken(token);
-    setTimeout(() => setCopiedToken(null), 2000);
+    copiedTimerRef.current = setTimeout(() => setCopiedToken(null), 2000);
   };
 
   const FILTERS = [
