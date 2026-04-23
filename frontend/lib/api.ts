@@ -179,8 +179,8 @@ export const trackingApi = {
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
 export const analyticsApi = {
-  overview:      () => api.get("/api/v1/analytics/overview"),
-  conversations: (days = 30) => api.get("/api/v1/analytics/conversations", { params: { days } }),
+  overview:      (signal?: AbortSignal) => api.get("/api/v1/analytics/overview", { signal }),
+  conversations: (days = 30, signal?: AbortSignal) => api.get("/api/v1/analytics/conversations", { params: { days }, signal }),
 };
 
 // ─── Business ─────────────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ export const businessApi = {
   },
   getCatalog:    () => api.get("/api/v1/business/catalog"),
   updateProfile: (data: object) => api.put("/api/v1/business/profile", data),
-  usage:         () => api.get<UsageData>("/api/v1/business/usage"),
+  usage:         (signal?: AbortSignal) => api.get<UsageData>("/api/v1/business/usage", { signal }),
 };
 
 export default api;
