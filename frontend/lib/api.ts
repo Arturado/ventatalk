@@ -28,10 +28,15 @@ export function msUntilExpiry(token: string): number {
 // ─── Refresh-queue: cola para peticiones simultáneas durante el refresh ───────
 
 let isRefreshing = false;
-let waitQueue: Array<(newToken: string) => void> = [];
+let waitQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
 
 function flushQueue(newToken: string) {
-  waitQueue.forEach((cb) => cb(newToken));
+  waitQueue.forEach(({ resolve }) => resolve(newToken));
+  waitQueue = [];
+}
+
+function rejectQueue(err: unknown) {
+  waitQueue.forEach(({ reject }) => reject(err));
   waitQueue = [];
 }
 
@@ -76,12 +81,13 @@ api.interceptors.response.use(
     // Si ya hay un refresh en curso, encolar y esperar
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
-        waitQueue.push((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          resolve(api(original));
+        waitQueue.push({
+          resolve: (token) => {
+            original.headers.Authorization = `Bearer ${token}`;
+            resolve(api(original));
+          },
+          reject,
         });
-        // Si el refresh falla, rechazar también esta petición
-        setTimeout(() => reject(err), 15_000);
       });
     }
 
@@ -91,9 +97,9 @@ api.interceptors.response.use(
       flushQueue(newToken);
       original.headers.Authorization = `Bearer ${newToken}`;
       return api(original);
-    } catch {
-      // Refresh falló → sesión expirada definitivamente
-      waitQueue = [];
+    } catch (refreshErr) {
+      // Refresh falló → rechazar inmediatamente todas las peticiones en cola
+      rejectQueue(refreshErr);
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       if (typeof window !== "undefined") window.location.href = "/auth/login";
