@@ -35,7 +35,11 @@ from app.models.base import Base, TimestampMixin, UUIDMixin
 class PlanType(str, PyEnum):
     STARTER = "starter"
     PRO = "pro"
-    BUSINESS = "business"
+    MAX = "max"
+
+class ConversationChannel(str, PyEnum):
+    WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
 
 
 class LeadStage(str, PyEnum):
@@ -110,6 +114,17 @@ class Business(Base, UUIDMixin, TimestampMixin):
         default=PlanType.STARTER
     )
     plan_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Billing
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    billing_cycle: Mapped[str] = mapped_column(String(20), default="monthly")  # monthly | annual
+
+    # Features activos (controlados por plan + add-ons)
+    features: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+
+    # Contador conversaciones mes actual
+    conversations_this_month: Mapped[int] = mapped_column(Integer, default=0)
+    conversations_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Meta: límites según plan
@@ -207,6 +222,9 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
 
     assigned_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Canal de origen
+    channel: Mapped[str] = mapped_column(String(20), default="whatsapp")  # whatsapp | instagram
 
     # Ventana de 24h de Meta: si el cliente escribió en las últimas 24h podemos responder libremente
     wa_window_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
