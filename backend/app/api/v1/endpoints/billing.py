@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.plan_limits import PLAN_LIMITS
+from app.core.plan_limits import get_plan_limits, get_plan_features
 from app.core.security import get_current_business
 from app.models.models import Business, PlanType
 
@@ -26,21 +26,29 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 def _price_to_plan() -> dict[str, str]:
     return {
         settings.STRIPE_PRICE_STARTER: "starter",
+        settings.STRIPE_PRICE_STARTER_ANNUAL: "starter",
         settings.STRIPE_PRICE_PRO: "pro",
-        settings.STRIPE_PRICE_BUSINESS: "business",
+        settings.STRIPE_PRICE_PRO_ANNUAL: "pro",
+        settings.STRIPE_PRICE_MAX: "max",
+        settings.STRIPE_PRICE_MAX_ANNUAL: "max",
     }
 
 
-def _plan_to_price() -> dict[str, str]:
-    return {
-        "starter": settings.STRIPE_PRICE_STARTER,
-        "pro": settings.STRIPE_PRICE_PRO,
-        "business": settings.STRIPE_PRICE_BUSINESS,
+def _plan_to_price(plan: str, annual: bool = False) -> str | None:
+    mapping = {
+        ("starter", False): settings.STRIPE_PRICE_STARTER,
+        ("starter", True): settings.STRIPE_PRICE_STARTER_ANNUAL,
+        ("pro", False): settings.STRIPE_PRICE_PRO,
+        ("pro", True): settings.STRIPE_PRICE_PRO_ANNUAL,
+        ("max", False): settings.STRIPE_PRICE_MAX,
+        ("max", True): settings.STRIPE_PRICE_MAX_ANNUAL,
     }
+    return mapping.get((plan.lower(), annual))
 
 
 class CheckoutRequest(BaseModel):
-    plan: str  # "starter" | "pro" | "business"
+    plan: str        # "starter" | "pro" | "max"
+    annual: bool = False
 
 
 @router.post("/create-checkout-session")
@@ -50,18 +58,29 @@ async def create_checkout_session(
 ):
     """Crea una Stripe Embedded Checkout Session y devuelve el client_secret."""
     plan = body.plan.lower()
-    price_id = _plan_to_price().get(plan)
+    price_id = _plan_to_price(plan, body.annual)
     if not price_id:
         raise HTTPException(status_code=400, detail=f"Plan inválido: {plan}")
 
     try:
+        # Usar customer existente si ya tiene stripe_customer_id
+        customer_kwargs = {}
+        if business.stripe_customer_id:
+            customer_kwargs["customer"] = business.stripe_customer_id
+        else:
+            customer_kwargs["customer_email"] = business.email
+
         session = stripe.checkout.Session.create(
             ui_mode="embedded",
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
-            customer_email=business.email,
-            return_url="https://app.ventatalk.com/dashboard?upgraded=true",
-            metadata={"business_id": str(business.id)},
+            return_url=f"{settings.APP_URL}/dashboard?upgraded=true",
+            metadata={
+                "business_id": str(business.id),
+                "plan": plan,
+                "annual": str(body.annual),
+            },
+            **customer_kwargs,
         )
     except stripe.StripeError as e:
         logger.error("Stripe error creating checkout session: %s", e)
@@ -88,63 +107,150 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return {"status": "error"}
 
     if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        business_id = (session.get("metadata") or {}).get("business_id")
-        subscription_id = session.get("subscription")
+        await _handle_checkout_completed(event["data"]["object"], db)
 
-        if not business_id or not subscription_id:
-            logger.warning("Webhook checkout.session.completed sin business_id o subscription_id")
-            return {"status": "ok"}
+    elif event["type"] == "customer.subscription.updated":
+        await _handle_subscription_updated(event["data"]["object"], db)
 
-        try:
-            subscription = stripe.Subscription.retrieve(
-                subscription_id, expand=["items.data.price"]
-            )
-            price_id = subscription["items"]["data"][0]["price"]["id"]
-            plan_name = _price_to_plan().get(price_id)
-
-            if not plan_name:
-                logger.warning("Webhook: price_id desconocido %s", price_id)
-                return {"status": "ok"}
-
-            limits = PLAN_LIMITS[plan_name]
-            business = await db.get(Business, business_id)
-            if not business:
-                logger.warning("Webhook: business %s no encontrado", business_id)
-                return {"status": "ok"}
-
-            business.plan = PlanType(plan_name)
-            business.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-            business.max_phone_numbers = limits["max_phone_numbers"]
-            business.max_conversations_per_month = limits["max_conversations_per_month"]
-            business.max_catalog_items = limits["max_catalog_items"]
-            await db.commit()
-            logger.info("Plan actualizado a %s para business %s", plan_name, business_id)
-
-        except Exception as e:
-            logger.error("Webhook: error procesando checkout.session.completed: %s", e)
+    elif event["type"] == "customer.subscription.deleted":
+        await _handle_subscription_deleted(event["data"]["object"], db)
 
     return {"status": "ok"}
+
+
+async def _handle_checkout_completed(session: dict, db: AsyncSession):
+    business_id = (session.get("metadata") or {}).get("business_id")
+    subscription_id = session.get("subscription")
+    customer_id = session.get("customer")
+
+    if not business_id or not subscription_id:
+        logger.warning("checkout.session.completed sin business_id o subscription_id")
+        return
+
+    try:
+        subscription = stripe.Subscription.retrieve(
+            subscription_id, expand=["items.data.price"]
+        )
+        price_id = subscription["items"]["data"][0]["price"]["id"]
+        plan_name = _price_to_plan().get(price_id)
+
+        if not plan_name:
+            logger.warning("Webhook: price_id desconocido %s", price_id)
+            return
+
+        business = await db.get(Business, business_id)
+        if not business:
+            logger.warning("Webhook: business %s no encontrado", business_id)
+            return
+
+        limits = get_plan_limits(plan_name)
+        features = get_plan_features(plan_name)
+
+        # Preservar add-ons activos si ya tenía features
+        if business.features:
+            existing = business.features
+            # Mantener add-ons que el cliente ya pagó
+            for addon in ["instagram", "mercadolibre", "extra_stores", "extra_whatsapp_numbers"]:
+                if existing.get(addon):
+                    features[addon] = existing[addon]
+
+        annual = (session.get("metadata") or {}).get("annual") == "True"
+
+        business.plan = PlanType(plan_name)
+        business.stripe_customer_id = customer_id
+        business.stripe_subscription_id = subscription_id
+        business.billing_cycle = "annual" if annual else "monthly"
+        business.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=365 if annual else 30)
+        business.max_phone_numbers = limits["max_phone_numbers"]
+        business.max_conversations_per_month = limits["max_conversations_per_month"]
+        business.features = features
+
+        await db.commit()
+        logger.info("Plan actualizado a %s para business %s", plan_name, business_id)
+
+    except Exception as e:
+        logger.error("Error procesando checkout.session.completed: %s", e)
+
+
+async def _handle_subscription_updated(subscription: dict, db: AsyncSession):
+    """Maneja cambios de plan (upgrades/downgrades)."""
+    try:
+        customer_id = subscription.get("customer")
+        price_id = subscription["items"]["data"][0]["price"]["id"]
+        plan_name = _price_to_plan().get(price_id)
+
+        if not plan_name or not customer_id:
+            return
+
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Business).where(Business.stripe_customer_id == customer_id)
+        )
+        business = result.scalar_one_or_none()
+        if not business:
+            logger.warning("subscription.updated: no business para customer %s", customer_id)
+            return
+
+        limits = get_plan_limits(plan_name)
+        features = get_plan_features(plan_name)
+
+        # Preservar add-ons activos
+        if business.features:
+            for addon in ["instagram", "mercadolibre", "extra_stores", "extra_whatsapp_numbers"]:
+                if business.features.get(addon):
+                    features[addon] = business.features[addon]
+
+        business.plan = PlanType(plan_name)
+        business.stripe_subscription_id = subscription["id"]
+        business.max_phone_numbers = limits["max_phone_numbers"]
+        business.max_conversations_per_month = limits["max_conversations_per_month"]
+        business.features = features
+
+        await db.commit()
+        logger.info("Suscripción actualizada a %s para business %s", plan_name, business.id)
+
+    except Exception as e:
+        logger.error("Error procesando subscription.updated: %s", e)
+
+
+async def _handle_subscription_deleted(subscription: dict, db: AsyncSession):
+    """Maneja cancelaciones — desactiva el tenant."""
+    try:
+        customer_id = subscription.get("customer")
+        if not customer_id:
+            return
+
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Business).where(Business.stripe_customer_id == customer_id)
+        )
+        business = result.scalar_one_or_none()
+        if not business:
+            return
+
+        business.is_active = False
+        business.stripe_subscription_id = None
+        await db.commit()
+        logger.info("Suscripción cancelada para business %s", business.id)
+
+    except Exception as e:
+        logger.error("Error procesando subscription.deleted: %s", e)
 
 
 @router.get("/portal")
 async def billing_portal(business: Business = Depends(get_current_business)):
     """Crea una Stripe Billing Portal Session para que el cliente gestione su suscripción."""
-    try:
-        customers = stripe.Customer.list(email=business.email, limit=1)
-        if not customers.data:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontró una suscripción activa para este negocio",
-            )
-        customer_id = customers.data[0].id
-
-        portal_session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url="https://app.ventatalk.com/dashboard/settings",
+    if not business.stripe_customer_id:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontró una suscripción activa para este negocio",
         )
-    except HTTPException:
-        raise
+
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=business.stripe_customer_id,
+            return_url=f"{settings.APP_URL}/dashboard/settings",
+        )
     except stripe.StripeError as e:
         logger.error("Stripe error creating portal session: %s", e)
         raise HTTPException(status_code=502, detail="Error al conectar con Stripe")

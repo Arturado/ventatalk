@@ -8,6 +8,7 @@ import uuid
 
 from app.core.database import get_db
 from app.core.config import get_settings
+from app.core.plan_limits import get_plan_features, get_plan_limits
 from app.core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -56,11 +57,23 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if existing_slug.scalar_one_or_none():
         slug = f"{slug}-{body.email.split('@')[0]}"
 
+    # Asignar límites y features del plan Starter por defecto
+    starter_limits = get_plan_limits("starter")
+    starter_features = get_plan_features("starter")
+
     business = Business(
         name=body.name,
         slug=slug,
         email=body.email,
         hashed_password=hash_password(body.password),
+        # Límites
+        max_phone_numbers=starter_limits["max_phone_numbers"],
+        max_conversations_per_month=starter_limits["max_conversations_per_month"],
+        # Features
+        features=starter_features,
+        # Contadores
+        conversations_this_month=0,
+        billing_cycle="monthly",
     )
     db.add(business)
     await db.commit()
@@ -126,7 +139,11 @@ async def me(business: Business = Depends(get_current_business)):
         "name": business.name,
         "email": business.email,
         "plan": business.plan,
+        "billing_cycle": business.billing_cycle,
+        "features": business.features,
         "ai_tone": business.ai_tone,
         "ai_enabled": business.ai_enabled,
         "ai_instructions": business.ai_instructions,
+        "conversations_this_month": business.conversations_this_month,
+        "max_conversations_per_month": business.max_conversations_per_month,
     }

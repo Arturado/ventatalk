@@ -4,33 +4,76 @@ Constantes y helpers para verificar límites de plan.
 """
 import calendar
 from datetime import datetime, timezone
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.models import Business, CatalogItem, Conversation
 
+# ── Límites por plan ─────────────────────────────────────────────────
 PLAN_LIMITS = {
     "starter": {
         "max_phone_numbers": 1,
-        "max_conversations_per_month": 500,
-        "max_catalog_items": 50,
+        "max_conversations_per_month": 200,
+        "max_catalog_items": -1,  # sin límite de catálogo
+        "overage_price_usd": 0.40,
     },
     "pro": {
-        "max_phone_numbers": 2,
-        "max_conversations_per_month": -1,
+        "max_phone_numbers": 3,
+        "max_conversations_per_month": 1000,
         "max_catalog_items": -1,
+        "overage_price_usd": 0.40,
     },
-    "business": {
-        "max_phone_numbers": -1,
-        "max_conversations_per_month": -1,
+    "max": {
+        "max_phone_numbers": 4,
+        "max_conversations_per_month": 3000,
         "max_catalog_items": -1,
+        "overage_price_usd": 0.30,
+    },
+}
+
+# ── Features por plan ────────────────────────────────────────────────
+# Estos features se asignan automáticamente al crear/cambiar de plan.
+# Add-ons (instagram, mercadolibre, etc.) se activan por separado vía Stripe.
+PLAN_FEATURES = {
+    "starter": {
+        "abandoned_carts": True,
+        "outbound_campaigns": False,
+        "reviews_module": False,
+        "b2b_quotes": False,
+        "instagram": False,
+        "mercadolibre": False,
+        "extra_stores": 0,
+        "extra_whatsapp_numbers": 0,
+    },
+    "pro": {
+        "abandoned_carts": True,
+        "outbound_campaigns": True,
+        "reviews_module": True,
+        "b2b_quotes": False,
+        "instagram": False,
+        "mercadolibre": False,
+        "extra_stores": 0,
+        "extra_whatsapp_numbers": 0,
+    },
+    "max": {
+        "abandoned_carts": True,
+        "outbound_campaigns": True,
+        "reviews_module": True,
+        "b2b_quotes": True,
+        "instagram": False,
+        "mercadolibre": False,
+        "extra_stores": 0,
+        "extra_whatsapp_numbers": 0,
     },
 }
 
 
-def get_plan_defaults(plan: str) -> dict:
+def get_plan_limits(plan: str) -> dict:
     return PLAN_LIMITS.get(plan.lower(), PLAN_LIMITS["starter"])
+
+
+def get_plan_features(plan: str) -> dict:
+    """Retorna los features base del plan. Los add-ons se mergean encima."""
+    return PLAN_FEATURES.get(plan.lower(), PLAN_FEATURES["starter"]).copy()
 
 
 def days_until_reset() -> int:

@@ -1,6 +1,5 @@
 from functools import lru_cache
 from typing import Optional
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,10 +8,11 @@ class Settings(BaseSettings):
 
     # App
     APP_ENV: str = "development"
+    APP_URL: str = "https://app.ventatalk.com"
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30       # 30 días para el refresh token
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # DB
     DATABASE_URL: str
@@ -44,9 +44,14 @@ class Settings(BaseSettings):
     # Stripe
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    # Precios mensuales
     STRIPE_PRICE_STARTER: str = ""
     STRIPE_PRICE_PRO: str = ""
-    STRIPE_PRICE_BUSINESS: str = ""
+    STRIPE_PRICE_MAX: str = ""
+    # Precios anuales
+    STRIPE_PRICE_STARTER_ANNUAL: str = ""
+    STRIPE_PRICE_PRO_ANNUAL: str = ""
+    STRIPE_PRICE_MAX_ANNUAL: str = ""
 
     @property
     def is_production(self) -> bool:
