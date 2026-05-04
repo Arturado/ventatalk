@@ -34,8 +34,9 @@ _cors_origins = list({
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
-    settings.NEXT_PUBLIC_API_URL,
-    settings.WIDGET_ORIGIN,
+    settings.APP_URL,                        # https://app.ventatalk.com
+    settings.WIDGET_ORIGIN,                  # https://ventatalk.com
+    "https://admin.ventatalk.com",
 })
 
 app.add_middleware(
