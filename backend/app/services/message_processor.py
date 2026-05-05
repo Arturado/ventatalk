@@ -28,6 +28,7 @@ from app.models.models import (
     ConversationStatus, Lead, LeadStage, Message,
     MessageIntent, MessageRole, MessageType, PhoneNumber,
 )
+from app.core.plan_limits import is_conversation_limit_exceeded
 from app.services.ai_service import AIService
 from app.services.whatsapp_service import WhatsAppService
 
@@ -80,7 +81,6 @@ async def _process(message: dict, phone_number_id: str, contacts_info: list) -> 
             return
 
         # ── 2.5. Verificar límite de conversaciones del plan ─────────
-        from app.core.plan_limits import is_conversation_limit_exceeded
         if await is_conversation_limit_exceeded(db, business):
             logger.info(f"Business {business.id}: límite de conversaciones alcanzado, mensaje bloqueado")
             wa_service = WhatsAppService(
@@ -100,7 +100,23 @@ async def _process(message: dict, phone_number_id: str, contacts_info: list) -> 
         contact = await _upsert_contact(db, business.id, from_phone, contacts_info)
 
         # ── 4. Upsert Conversation ───────────────────────────────────
-        conversation = await _get_or_create_conversation(db, business.id, contact, phone_record)
+        conversation, is_new_conversation = await _get_or_create_conversation(db, business.id, contact, phone_record)
+
+        # ── 4.5. Contabilizar conversación nueva en Business ─────────
+        if is_new_conversation:
+            business.conversations_this_month += 1
+            if business.conversations_reset_at is None:
+                now_utc = datetime.now(timezone.utc)
+                if now_utc.month == 12:
+                    business.conversations_reset_at = now_utc.replace(
+                        year=now_utc.year + 1, month=1, day=1,
+                        hour=0, minute=0, second=0, microsecond=0,
+                    )
+                else:
+                    business.conversations_reset_at = now_utc.replace(
+                        month=now_utc.month + 1, day=1,
+                        hour=0, minute=0, second=0, microsecond=0,
+                    )
 
         # ── 5. Extraer texto del mensaje ─────────────────────────────
         user_text = _extract_text(message)
@@ -123,6 +139,14 @@ async def _process(message: dict, phone_number_id: str, contacts_info: list) -> 
         )
         db.add(user_message)
         await db.flush()
+
+        # ── 6.5. Verificar límite antes de llamar a IA ──────────────
+        # Solo re-chequeamos si la conversación es nueva: para conversaciones
+        # existentes el paso 2.5 ya bloqueó cuando el límite estaba excedido.
+        if is_new_conversation and await is_conversation_limit_exceeded(db, business):
+            await db.commit()
+            await _notify_owner_limit_exceeded(business)
+            return
 
         # ── 7. IA: clasificar, RAG, responder ────────────────────────
         ai_service = AIService(db, business)
@@ -233,7 +257,7 @@ async def _upsert_contact(db, business_id, wa_phone: str, contacts_info: list) -
 
 async def _get_or_create_conversation(
     db, business_id, contact: Contact, phone_record: PhoneNumber
-) -> Conversation:
+) -> tuple[Conversation, bool]:
     # Buscar conversación abierta
     result = await db.execute(
         select(Conversation)
@@ -258,8 +282,9 @@ async def _get_or_create_conversation(
         )
         db.add(conv)
         await db.flush()
+        return conv, True
 
-    return conv
+    return conv, False
 
 
 async def _update_lead(db, contact: Contact, business_id, intent: MessageIntent) -> None:
@@ -288,3 +313,20 @@ def _stage_advances(current: LeadStage, new: LeadStage) -> bool:
     order = [LeadStage.NEW, LeadStage.INTERESTED, LeadStage.QUOTED,
              LeadStage.CLOSED_WON, LeadStage.CLOSED_LOST]
     return order.index(new) > order.index(current)
+
+
+async def _notify_owner_limit_exceeded(business: Business) -> None:
+    """
+    Avisa al dueño que su negocio alcanzó el límite de conversaciones del plan.
+    Emite un log estructurado para que el sistema de monitoreo lo capture.
+    TODO: enviar email a business.email cuando el servicio de correo esté disponible.
+    """
+    logger.warning(
+        "PLAN_LIMIT_EXCEEDED business_id=%s name=%r plan=%s "
+        "limit=%d email=%s",
+        business.id,
+        business.name,
+        business.plan.value,
+        business.max_conversations_per_month,
+        business.email,
+    )
