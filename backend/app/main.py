@@ -18,12 +18,12 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.getLogger(__name__).info(f"VentaBot API iniciando [{settings.APP_ENV}]")
+    logging.getLogger(__name__).info(f"VentaTalk API iniciando [{settings.APP_ENV}]")
     yield
 
 
 app = FastAPI(
-    title="VentaBot API",
+    title="VentaTalk API",
     version="1.0.0",
     docs_url="/docs" if not settings.is_production else None,
     redoc_url=None,
