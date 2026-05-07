@@ -1,8 +1,8 @@
-/* VentaTalk Chat Widget v1.0.0 */
+/* VentaTalk Chat Widget v1.1.0 */
 (function () {
   'use strict';
 
-  var cfg = window.VentabotConfig || {};
+  var cfg = window.VentaTalkConfig || {};
 
   // Validación mínima
   if (!cfg.phone) return;
@@ -61,12 +61,12 @@
     var waUrl    = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
 
     var root = document.createElement('div');
-    root.id = 'ventabot-root';
+    root.id = 'ventatalk-root';
     root.className = 'pos-' + (cfg.position || 'right');
 
     root.innerHTML =
       // Popup
-      '<div id="ventabot-popup" role="dialog" aria-label="Iniciar chat">' +
+      '<div id="ventatalk-popup" role="dialog" aria-label="Iniciar chat">' +
         '<div class="vb-header">' +
           '<div class="vb-avatar" style="background:' + color + ';">' +
             SVG_WA +
@@ -91,7 +91,7 @@
         '</div>' +
       '</div>' +
       // Botón flotante
-      '<button id="ventabot-btn" style="background:' + color + ';" aria-label="Abrir chat WhatsApp">' +
+      '<button id="ventatalk-btn" style="background:' + color + ';" aria-label="Abrir chat WhatsApp">' +
         SVG_WA +
         SVG_CLOSE +
       '</button>';
@@ -115,7 +115,7 @@
 
   function toggle() {
     isOpen = !isOpen;
-    var root = document.getElementById('ventabot-root');
+    var root = document.getElementById('ventatalk-root');
     if (isOpen) {
       root.classList.add('is-open');
     } else {
@@ -131,7 +131,7 @@
   // Cerrar al hacer clic fuera
   document.addEventListener('click', function (e) {
     if (!isOpen) return;
-    var root = document.getElementById('ventabot-root');
+    var root = document.getElementById('ventatalk-root');
     if (root && !root.contains(e.target)) toggle();
   });
 
@@ -139,7 +139,7 @@
 
   function init() {
     var root   = buildWidget();
-    var btn    = root.querySelector('#ventabot-btn');
+    var btn    = root.querySelector('#ventatalk-btn');
     var ctaBtn = root.querySelector('.vb-cta');
 
     btn.addEventListener('click', function (e) {

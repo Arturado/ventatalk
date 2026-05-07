@@ -3,7 +3,7 @@ Contributors: ventatalk
 Tags: whatsapp, chat, widget, floating button, ventatalk, chatbot, ia, ventas
 Requires at least: 5.9
 Tested up to: 6.7
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,10 +22,11 @@ Con un solo clic, tus visitantes abren WhatsApp con un mensaje pre-escrito listo
 * Popup con nombre del negocio, estado en línea y mensaje de bienvenida
 * Color, posición y mensaje 100% personalizables desde el panel de WordPress
 * Demora de aparición configurable (ideal para no interrumpir al visitante)
-* Compatible con shortcode `[ventabot_chat]` para posicionamiento manual
+* Compatible con shortcode `[ventatalk_chat]` para posicionamiento manual
 * Responsive: se adapta automáticamente a móviles
 * Sin dependencias externas — carga rápida, sin jQuery
 * Respeta `prefers-reduced-motion` para accesibilidad
+* Sincronización automática en tiempo real de productos WooCommerce
 
 = ¿Cómo funciona? =
 
@@ -43,16 +44,16 @@ Con un solo clic, tus visitantes abren WhatsApp con un mensaje pre-escrito listo
 
 = Instalación manual (recomendada para pilotos) =
 
-1. Descarga el archivo `ventabot.zip`
+1. Descarga el archivo `ventatalk.zip`
 2. En tu panel de WordPress, ve a **Plugins → Añadir nuevo → Subir plugin**
-3. Selecciona el archivo `ventabot.zip` y haz clic en **Instalar ahora**
+3. Selecciona el archivo `ventatalk.zip` y haz clic en **Instalar ahora**
 4. Activa el plugin
 5. Ve a **Ajustes → VentaTalk** y configura tu número de WhatsApp
 
 = Instalación vía FTP =
 
-1. Descomprime `ventabot.zip`
-2. Sube la carpeta `ventabot/` a `/wp-content/plugins/`
+1. Descomprime `ventatalk.zip`
+2. Sube la carpeta `ventatalk/` a `/wp-content/plugins/`
 3. Activa el plugin desde **Plugins → Plugins instalados**
 4. Configura en **Ajustes → VentaTalk**
 
@@ -76,7 +77,7 @@ Para el botón flotante básico de WhatsApp, no es obligatorio. Cualquier númer
 
 = ¿El widget aparece en todas las páginas? =
 
-Sí, por defecto aparece en todas las páginas del frontend. Si prefieres colocarlo manualmente en una página específica, puedes desactivar la aparición automática y usar el shortcode `[ventabot_chat]`.
+Sí, por defecto aparece en todas las páginas del frontend. Si prefieres colocarlo manualmente en una página específica, puedes desactivar la aparición automática y usar el shortcode `[ventatalk_chat]`.
 
 = ¿Puedo cambiar el color del botón? =
 
@@ -94,6 +95,15 @@ No. El widget carga en el footer con un archivo CSS (~4KB) y JS (~4KB) minúscul
 
 Configura el **Mensaje pre-escrito** con el prefijo `[WEB]`. Por ejemplo: `[WEB] Hola, vengo desde el sitio web y quiero consultar.` VentaTalk filtra automáticamente las conversaciones por este prefijo.
 
+= ¿Cómo funciona la sincronización automática de productos? =
+
+Con el token de API configurado, el plugin sincroniza automáticamente cada producto cuando:
+- Se guarda o actualiza desde el panel de WordPress
+- Cambia el stock (venta, ajuste manual, recepción de mercancía)
+- Se actualiza el precio programáticamente
+
+Solo se envía el producto afectado, no el catálogo completo. Si el token no está configurado, los hooks no hacen nada.
+
 == Screenshots ==
 
 1. Botón flotante de WhatsApp en la esquina inferior derecha
@@ -102,15 +112,21 @@ Configura el **Mensaje pre-escrito** con el prefijo `[WEB]`. Por ejemplo: `[WEB]
 
 == Changelog ==
 
+= 1.1.0 =
+* Renombrado el slug del plugin a "ventatalk"
+* Sincronización automática en tiempo real con WooCommerce (woocommerce_update_product, woocommerce_product_set_stock, woocommerce_product_set_price)
+* Nueva sección "Widget" en settings con selector de tipo (WhatsApp activo, Chat Web próximamente)
+* Shortcode actualizado a [ventatalk_chat]
+
 = 1.0.0 =
 * Versión inicial
 * Botón flotante con animación de pulso
 * Popup con header, burbuja de mensaje y CTA
 * Panel de configuración completo en WordPress Admin
-* Soporte para shortcode `[ventabot_chat]`
+* Soporte para shortcode `[ventatalk_chat]`
 * Responsive y accesible (prefers-reduced-motion)
 
 == Upgrade Notice ==
 
-= 1.0.0 =
-Primera versión estable.
+= 1.1.0 =
+Slug renombrado a "ventatalk". Si tienes el plugin anterior (ventabot) activo, desactívalo primero antes de activar esta versión.

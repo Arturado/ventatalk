@@ -1,15 +1,15 @@
 /* ── VentaTalk Chat Widget ── */
 
-#ventabot-root *,
-#ventabot-root *::before,
-#ventabot-root *::after {
+#ventatalk-root *,
+#ventatalk-root *::before,
+#ventatalk-root *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 /* ── Contenedor raíz ── */
-#ventabot-root {
+#ventatalk-root {
   position: fixed;
   bottom: 24px;
   z-index: 99999;
@@ -17,11 +17,11 @@
   -webkit-font-smoothing: antialiased;
 }
 
-#ventabot-root.pos-right { right: 24px; }
-#ventabot-root.pos-left  { left: 24px;  }
+#ventatalk-root.pos-right { right: 24px; }
+#ventatalk-root.pos-left  { left: 24px;  }
 
 /* ── Botón flotante ── */
-#ventabot-btn {
+#ventatalk-btn {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -36,31 +36,31 @@
   z-index: 2;
 }
 
-#ventabot-btn:hover {
+#ventatalk-btn:hover {
   transform: scale(1.08);
   box-shadow: 0 6px 28px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
 }
 
-#ventabot-btn:active { transform: scale(0.97); }
+#ventatalk-btn:active { transform: scale(0.97); }
 
-#ventabot-btn svg {
+#ventatalk-btn svg {
   width: 30px;
   height: 30px;
   fill: #ffffff;
   transition: opacity 150ms ease;
 }
 
-#ventabot-btn .vb-icon-close {
+#ventatalk-btn .vb-icon-close {
   display: none;
   width: 22px;
   height: 22px;
 }
 
-#ventabot-root.is-open #ventabot-btn .vb-icon-wa    { display: none; }
-#ventabot-root.is-open #ventabot-btn .vb-icon-close { display: block; }
+#ventatalk-root.is-open #ventatalk-btn .vb-icon-wa    { display: none; }
+#ventatalk-root.is-open #ventatalk-btn .vb-icon-close { display: block; }
 
 /* Pulso de atención */
-#ventabot-btn::before {
+#ventatalk-btn::before {
   content: '';
   position: absolute;
   inset: -6px;
@@ -76,10 +76,10 @@
   100% { transform: scale(1.5); opacity: 0; }
 }
 
-#ventabot-root.is-open #ventabot-btn::before { animation: none; opacity: 0; }
+#ventatalk-root.is-open #ventatalk-btn::before { animation: none; opacity: 0; }
 
 /* ── Popup card ── */
-#ventabot-popup {
+#ventatalk-popup {
   position: absolute;
   bottom: 70px;
   width: 300px;
@@ -96,24 +96,24 @@
   transition: opacity 200ms ease, transform 200ms ease;
 }
 
-#ventabot-root.pos-right #ventabot-popup { right: 0; }
-#ventabot-root.pos-left  #ventabot-popup { left: 0; }
+#ventatalk-root.pos-right #ventatalk-popup { right: 0; }
+#ventatalk-root.pos-left  #ventatalk-popup { left: 0; }
 
-#ventabot-root.is-open #ventabot-popup {
+#ventatalk-root.is-open #ventatalk-popup {
   opacity: 1;
   transform: scale(1) translateY(0);
   pointer-events: auto;
 }
 
 /* Header del popup */
-#ventabot-popup .vb-header {
+#ventatalk-popup .vb-header {
   padding: 18px 20px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-#ventabot-popup .vb-avatar {
+#ventatalk-popup .vb-avatar {
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -123,29 +123,29 @@
   justify-content: center;
 }
 
-#ventabot-popup .vb-avatar svg {
+#ventatalk-popup .vb-avatar svg {
   width: 24px;
   height: 24px;
   fill: #ffffff;
 }
 
-#ventabot-popup .vb-meta {}
+#ventatalk-popup .vb-meta {}
 
-#ventabot-popup .vb-business-name {
+#ventatalk-popup .vb-business-name {
   font-size: 14px;
   font-weight: 700;
   color: #111827;
   line-height: 1.2;
 }
 
-#ventabot-popup .vb-status {
+#ventatalk-popup .vb-status {
   display: flex;
   align-items: center;
   gap: 5px;
   margin-top: 3px;
 }
 
-#ventabot-popup .vb-status-dot {
+#ventatalk-popup .vb-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -158,18 +158,18 @@
   50%       { opacity: 0.4; }
 }
 
-#ventabot-popup .vb-status-text {
+#ventatalk-popup .vb-status-text {
   font-size: 11px;
   color: #6b7280;
   font-weight: 500;
 }
 
 /* Burbuja de mensaje */
-#ventabot-popup .vb-body {
+#ventatalk-popup .vb-body {
   padding: 0 20px 18px;
 }
 
-#ventabot-popup .vb-bubble {
+#ventatalk-popup .vb-bubble {
   background: #f3f4f6;
   border-radius: 0 12px 12px 12px;
   padding: 12px 14px;
@@ -179,7 +179,7 @@
 }
 
 /* CTA button */
-#ventabot-popup .vb-cta {
+#ventatalk-popup .vb-cta {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -196,10 +196,10 @@
   transition: filter 150ms ease, transform 100ms ease;
 }
 
-#ventabot-popup .vb-cta:hover  { filter: brightness(1.08); }
-#ventabot-popup .vb-cta:active { transform: scale(0.98); }
+#ventatalk-popup .vb-cta:hover  { filter: brightness(1.08); }
+#ventatalk-popup .vb-cta:active { transform: scale(0.98); }
 
-#ventabot-popup .vb-cta svg {
+#ventatalk-popup .vb-cta svg {
   width: 18px;
   height: 18px;
   fill: #ffffff;
@@ -207,40 +207,40 @@
 }
 
 /* Footer con branding */
-#ventabot-popup .vb-footer {
+#ventatalk-popup .vb-footer {
   padding: 10px 20px;
   border-top: 1px solid #f3f4f6;
   text-align: center;
 }
 
-#ventabot-popup .vb-footer a {
+#ventatalk-popup .vb-footer a {
   font-size: 11px;
   color: #9ca3af;
   text-decoration: none;
 }
 
-#ventabot-popup .vb-footer a:hover { color: #6b7280; }
+#ventatalk-popup .vb-footer a:hover { color: #6b7280; }
 
 /* ── Responsive ── */
 @media (max-width: 480px) {
-  #ventabot-root.pos-right { right: 16px; }
-  #ventabot-root.pos-left  { left: 16px;  }
+  #ventatalk-root.pos-right { right: 16px; }
+  #ventatalk-root.pos-left  { left: 16px;  }
 
-  #ventabot-root { bottom: 16px; }
+  #ventatalk-root { bottom: 16px; }
 
-  #ventabot-popup {
+  #ventatalk-popup {
     width: calc(100vw - 32px);
   }
 
-  #ventabot-root.pos-right #ventabot-popup { right: 0; }
-  #ventabot-root.pos-left  #ventabot-popup { left: 0;  }
+  #ventatalk-root.pos-right #ventatalk-popup { right: 0; }
+  #ventatalk-root.pos-left  #ventatalk-popup { left: 0;  }
 }
 
 /* ── Reducir movimiento ── */
 @media (prefers-reduced-motion: reduce) {
-  #ventabot-btn,
-  #ventabot-btn::before,
-  #ventabot-popup,
+  #ventatalk-btn,
+  #ventatalk-btn::before,
+  #ventatalk-popup,
   .vb-status-dot {
     animation: none !important;
     transition: none !important;
