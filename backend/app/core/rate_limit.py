@@ -28,7 +28,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     LIMITS = {
         "/webhook":       (300, 60),
-        "/api/v1/auth":   (10, 60),
+        "/api/v1/auth":   (30, 60),
         "default":        (120, 60),
     }
 
@@ -55,6 +55,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         client_ip = request.client.host if request.client else "unknown"
         path = request.url.path
+        # No aplicar rate limit a preflight OPTIONS
+        if request.method == "OPTIONS":
+        return await call_next(request)
         max_requests, window_seconds = self._get_limit(path)
 
         key = f"rl:{client_ip}:{path.split('/')[1]}"
@@ -64,7 +67,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             now = time.time()
             pipe = redis.pipeline()
             pipe.zremrangebyscore(key, 0, now - window_seconds)
-            pipe.zcard(key)
+            pipe.zcard(key)"
             pipe.zadd(key, {str(now): now})
             pipe.expire(key, window_seconds * 2)
             results = await pipe.execute()
