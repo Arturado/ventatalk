@@ -18,6 +18,7 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             cd /home/hanowar/ventatalk
+            git stash
             git pull origin main
             docker compose -f docker-compose.prod.yml up --build -d
             docker compose -f docker-compose.prod.yml exec -T api alembic upgrade head
