@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     META_APP_SECRET: str
     WHATSAPP_API_VERSION: str = "v19.0"
 
+    # API pública
+    API_URL: str = "http://localhost:8000"
+
     # Frontend
     NEXT_PUBLIC_API_URL: str = "http://localhost:8000"
 

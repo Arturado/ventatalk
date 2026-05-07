@@ -79,8 +79,7 @@ async def create_tracking_link(
 
     from app.core.config import get_settings
     settings = get_settings()
-    api_url = settings.NEXT_PUBLIC_API_URL or "http://localhost:8000"
-    tracking_url = f"{api_url}/track/{token}"
+    tracking_url = f"{settings.API_URL}/track/{token}"
 
     return TrackingLinkOut(
         token=token,
@@ -110,12 +109,11 @@ async def list_tracking_links(
 
     from app.core.config import get_settings
     settings = get_settings()
-    api_url = settings.NEXT_PUBLIC_API_URL or "http://localhost:8000"
 
     return [
         TrackingLinkOut(
             token=ct.token,
-            tracking_url=f"{api_url}/track/{ct.token}",
+            tracking_url=f"{settings.API_URL}/track/{ct.token}",
             destination_url=ct.destination_url,
             label=ct.label,
             converted=ct.converted_at is not None,
