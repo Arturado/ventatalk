@@ -49,15 +49,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return self.LIMITS["default"]
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # En dev/test no aplicar rate limiting
         if settings.APP_ENV in ("development", "testing"):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
         path = request.url.path
+
         # No aplicar rate limit a preflight OPTIONS
         if request.method == "OPTIONS":
-        return await call_next(request)
+            return await call_next(request)
+
         max_requests, window_seconds = self._get_limit(path)
 
         key = f"rl:{client_ip}:{path.split('/')[1]}"
@@ -67,7 +68,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             now = time.time()
             pipe = redis.pipeline()
             pipe.zremrangebyscore(key, 0, now - window_seconds)
-            pipe.zcard(key)"
+            pipe.zcard(key)
             pipe.zadd(key, {str(now): now})
             pipe.expire(key, window_seconds * 2)
             results = await pipe.execute()
