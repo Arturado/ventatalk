@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store";
 import { Toaster } from "react-hot-toast";
 import { Sidebar } from "@/components/dashboard/Sidebar";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationPermissionModal } from "@/components/ui/NotificationPermissionModal";
 import { useNotifications } from "@/lib/useNotifications";
 import { Bell, Search, Menu, Bot } from "lucide-react";
@@ -84,7 +83,6 @@ function Navbar({ badgeCount, onMenuClick }: NavbarProps) {
         </button>
 
         {/* Theme toggle */}
-        <ThemeToggle />
 
         {/* Notification bell */}
         <button
