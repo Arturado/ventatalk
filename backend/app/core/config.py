@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     STRIPE_PRICE_PRO_ANNUAL: str = ""
     STRIPE_PRICE_MAX_ANNUAL: str = ""
 
+    # Superadmin
+    SUPERADMIN_EMAIL: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"

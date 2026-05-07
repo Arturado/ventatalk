@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.rate_limit import RateLimitMiddleware
-from app.api.v1.endpoints import auth, webhook, business, conversations, analytics, phone_numbers, integrations, tracking, chat_widget, billing
+from app.api.v1.endpoints import auth, webhook, business, conversations, analytics, phone_numbers, integrations, tracking, chat_widget, billing, admin
 from app.api.v1.endpoints.contacts import contacts_router, leads_router
 
 settings = get_settings()
@@ -61,6 +61,7 @@ app.include_router(tracking.router,      prefix=PREFIX)
 app.include_router(tracking.public_router)         # /track/{token} — sin prefijo, público
 app.include_router(chat_widget.router,   prefix=PREFIX)  # /api/v1/chat/widget — sin auth
 app.include_router(billing.router,       prefix=PREFIX)
+app.include_router(admin.router,         prefix=PREFIX)
 app.include_router(webhook.router)
 
 
