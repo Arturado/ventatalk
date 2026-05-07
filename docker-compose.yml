@@ -42,7 +42,7 @@ services:
       dockerfile: Dockerfile
     container_name: ventabot_api
     restart: unless-stopped
-    env_file: .env
+    env_file: .env.development
     ports:
       - "8000:8000"
     volumes:
@@ -61,7 +61,7 @@ services:
       dockerfile: Dockerfile
     container_name: ventabot_worker
     restart: unless-stopped
-    env_file: .env
+    env_file: .env.development
     volumes:
       - ./backend:/app
     depends_on:
@@ -78,7 +78,7 @@ services:
       dockerfile: Dockerfile
     container_name: ventabot_beat
     restart: unless-stopped
-    env_file: .env
+    env_file: .env.development
     volumes:
       - ./backend:/app
     depends_on:
@@ -92,7 +92,7 @@ services:
       dockerfile: Dockerfile
     container_name: ventabot_frontend
     restart: unless-stopped
-    env_file: .env
+    env_file: .env.development
     ports:
       - "3000:3000"
     volumes:

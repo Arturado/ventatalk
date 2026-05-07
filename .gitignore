@@ -8,6 +8,8 @@ venv/
 
 # Env
 .env
+.env.development
+.env.production
 !.env.example
 
 # Next.js
