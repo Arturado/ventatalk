@@ -1,4 +1,3 @@
-
 services:
   # ── Base de datos principal ──────────────────────────────────────
   db:

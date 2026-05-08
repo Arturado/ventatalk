@@ -5,8 +5,6 @@ import { conversationsApi, contactsApi } from "@/lib/api";
 import {
   MessageSquare,
   Send,
-  User,
-  Bot,
   UserCheck,
   X,
   Zap,
@@ -16,14 +14,15 @@ import {
   Copy,
   Check,
   ArrowLeft,
+  Search,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from "react-hot-toast";
 import { LeadPanel, type LeadInfo } from "@/components/dashboard/LeadPanel";
 import { trackingApi } from "@/lib/api";
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface Conversation {
   id: string;
@@ -58,35 +57,43 @@ interface ConvDetail extends Conversation {
   messages: Message[];
 }
 
-// ─── Tokens de diseño ────────────────────────────────────────────────────────
+// ─── Tokens ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  ai_handling:
-    "bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
-  human_assigned:
-    "bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
-  closed:
-    "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-700/40 dark:text-slate-500 dark:border-slate-700/30",
-  open:
-    "bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+  ai_handling:  "bg-indigo-100 text-indigo-700 border border-indigo-200",
+  human_assigned: "bg-amber-100 text-amber-700 border border-amber-200",
+  closed:       "bg-slate-100 text-slate-500 border border-slate-200",
+  open:         "bg-emerald-100 text-emerald-700 border border-emerald-200",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  ai_handling: "IA activa",
+  ai_handling:    "IA activa",
   human_assigned: "Agente",
-  closed: "Cerrada",
-  open: "Abierta",
+  closed:         "Cerrada",
+  open:           "Abierta",
+};
+
+const STATUS_DOT: Record<string, string> = {
+  ai_handling:    "bg-indigo-500",
+  human_assigned: "bg-amber-500",
+  closed:         "bg-slate-400",
+  open:           "bg-emerald-500",
 };
 
 const AVATAR_PALETTE = [
-  "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/70 dark:text-indigo-300",
-  "bg-violet-100 text-violet-700 dark:bg-violet-900/70 dark:text-violet-300",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/70 dark:text-emerald-300",
-  "bg-amber-100 text-amber-700 dark:bg-amber-900/70 dark:text-amber-300",
-  "bg-rose-100 text-rose-700 dark:bg-rose-900/70 dark:text-rose-300",
+  "bg-pink-500 text-white",
+  "bg-orange-400 text-white",
+  "bg-teal-500 text-white",
+  "bg-indigo-500 text-white",
+  "bg-rose-500 text-white",
+  "bg-emerald-500 text-white",
+  "bg-amber-500 text-white",
+  "bg-violet-500 text-white",
+  "bg-sky-500 text-white",
+  "bg-slate-500 text-white",
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getInitials(name: string | null, phone: string) {
   if (name) {
@@ -103,89 +110,43 @@ function getAvatarColor(str: string) {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
 }
 
-// ─── PipelineBar ─────────────────────────────────────────────────────────────
+function safeFormat(dateStr: string, fmt: string) {
+  try { return format(new Date(dateStr), fmt); } catch { return ""; }
+}
+
+// ─── PipelineBar — compact horizontal strip ───────────────────────────────────
 
 function PipelineBar({ conversations }: { conversations: Conversation[] }) {
-  const total = conversations.length;
-  const aiActive = conversations.filter((c) => c.status === "ai_handling").length;
-  const withAgent = conversations.filter((c) => c.status === "human_assigned").length;
-  const closed = conversations.filter((c) => c.status === "closed").length;
+  const total      = conversations.length;
+  const aiActive   = conversations.filter((c) => c.status === "ai_handling").length;
+  const withAgent  = conversations.filter((c) => c.status === "human_assigned").length;
+  const closed     = conversations.filter((c) => c.status === "closed").length;
 
   const metrics = [
-    {
-      label: "Total leads",
-      value: total,
-      valueColor: "text-gray-900 dark:text-slate-100",
-      labelColor: "text-slate-400 dark:text-slate-500",
-      bg: "bg-white dark:bg-slate-900",
-      border: "border-slate-200 dark:border-slate-700/50",
-      Icon: Users,
-      iconColor: "text-slate-400 dark:text-slate-500",
-      iconBg: "bg-slate-100 dark:bg-white/5",
-    },
-    {
-      label: "IA activa",
-      value: aiActive,
-      valueColor: "text-indigo-600 dark:text-indigo-400",
-      labelColor: "text-indigo-500/80 dark:text-indigo-500/70",
-      bg: "bg-indigo-50 dark:bg-indigo-950/40",
-      border: "border-indigo-200 dark:border-indigo-500/15",
-      Icon: Zap,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-100 dark:bg-white/5",
-    },
-    {
-      label: "Con agente",
-      value: withAgent,
-      valueColor: "text-amber-600 dark:text-amber-400",
-      labelColor: "text-amber-500/80 dark:text-amber-500/70",
-      bg: "bg-amber-50 dark:bg-amber-950/30",
-      border: "border-amber-200 dark:border-amber-500/15",
-      Icon: UserCheck,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-100 dark:bg-white/5",
-    },
-    {
-      label: "Cerradas",
-      value: closed,
-      valueColor: "text-slate-400 dark:text-slate-500",
-      labelColor: "text-slate-400 dark:text-slate-600",
-      bg: "bg-white dark:bg-slate-900",
-      border: "border-slate-200 dark:border-slate-700/50",
-      Icon: CheckCircle,
-      iconColor: "text-slate-400 dark:text-slate-600",
-      iconBg: "bg-slate-100 dark:bg-white/5",
-    },
+    { label: "Total leads", value: total,     Icon: Users,       valCls: "text-slate-700 dark:text-slate-200",  dotCls: "text-slate-400 dark:text-slate-500" },
+    { label: "IA activa",   value: aiActive,  Icon: Zap,         valCls: "text-indigo-600 dark:text-indigo-400", dotCls: "text-indigo-400 dark:text-indigo-500" },
+    { label: "Con agente",  value: withAgent, Icon: UserCheck,   valCls: "text-amber-600 dark:text-amber-400",   dotCls: "text-amber-400 dark:text-amber-500" },
+    { label: "Cerradas",    value: closed,    Icon: CheckCircle, valCls: "text-slate-400 dark:text-slate-500",   dotCls: "text-slate-400 dark:text-slate-600" },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:flex gap-2 md:gap-3">
-      {metrics.map(({ label, value, valueColor, labelColor, bg, border, Icon, iconColor, iconBg }) => (
-        <div
-          key={label}
-          className={`flex items-center gap-3 md:gap-4 px-3.5 md:px-5 py-3 md:py-3.5 rounded-xl border flex-1 ${bg} ${border}`}
-        >
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-            <Icon className={`w-4 h-4 ${iconColor}`} />
-          </div>
-          <div>
-            <p className={`text-xl md:text-2xl font-bold leading-none tracking-tight ${valueColor}`}>
-              {value}
-            </p>
-            <p className={`text-[11px] font-medium mt-0.5 ${labelColor}`}>{label}</p>
-          </div>
+    <div className="flex items-center gap-5 sm:gap-8 px-5 h-11 border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 flex-shrink-0">
+      {metrics.map(({ label, value, Icon, valCls, dotCls }) => (
+        <div key={label} className="flex items-center gap-1.5">
+          <Icon className={`w-3.5 h-3.5 ${dotCls}`} />
+          <span className={`text-[13px] font-bold leading-none ${valCls}`}>{value}</span>
+          <span className={`text-[11px] leading-none ${dotCls} hidden sm:inline`}>{label}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// Evita acumulación de mensajes — retiene solo los últimos 100
 function limitMessages(conv: ConvDetail): ConvDetail {
   return { ...conv, messages: conv.messages.slice(-100) };
 }
 
-// ─── Deep-link helper ────────────────────────────────────────────────────────
+// ─── Deep-link helper ─────────────────────────────────────────────────────────
 
 function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
   const searchParams = useSearchParams();
@@ -201,20 +162,21 @@ function DeepLinkOpener({ onOpen }: { onOpen: (id: string) => void }) {
 
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selected, setSelected] = useState<ConvDetail | null>(null);
-  const [leadInfo, setLeadInfo] = useState<LeadInfo | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [filter, setFilter] = useState("all");
+  const [selected, setSelected]           = useState<ConvDetail | null>(null);
+  const [leadInfo, setLeadInfo]           = useState<LeadInfo | null>(null);
+  const [replyText, setReplyText]         = useState("");
+  const [sending, setSending]             = useState(false);
+  const [filter, setFilter]               = useState("all");
+  const [searchQuery, setSearchQuery]     = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Tracking
   const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [trackingLinks, setTrackingLinks] = useState<TrackingLink[]>([]);
-  const [trackingUrl, setTrackingUrl] = useState("");
-  const [trackingLabel, setTrackingLabel] = useState("");
-  const [generatingLink, setGeneratingLink] = useState(false);
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [trackingLinks, setTrackingLinks]         = useState<TrackingLink[]>([]);
+  const [trackingUrl, setTrackingUrl]             = useState("");
+  const [trackingLabel, setTrackingLabel]         = useState("");
+  const [generatingLink, setGeneratingLink]       = useState(false);
+  const [copiedToken, setCopiedToken]             = useState<string | null>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -233,10 +195,7 @@ export default function ConversationsPage() {
       conversationsApi.list(params, signal).then((r) => setConversations(r.data)).catch(() => {});
     }, 10000);
 
-    return () => {
-      controller.abort();
-      clearInterval(interval);
-    };
+    return () => { controller.abort(); clearInterval(interval); };
   }, [filter]);
 
   useEffect(() => {
@@ -250,10 +209,10 @@ export default function ConversationsPage() {
     conversationsApi.get(id, signal).then((r) => setSelected(limitMessages(r.data))).catch(() => {});
     contactsApi.get(contactId, signal).then((r) => {
       setLeadInfo({
-        lead_id: r.data.lead_id ?? null,
-        lead_stage: r.data.lead_stage ?? null,
+        lead_id:              r.data.lead_id ?? null,
+        lead_stage:           r.data.lead_stage ?? null,
         lead_estimated_value: r.data.lead_estimated_value ?? null,
-        contact_id: contactId,
+        contact_id:           contactId,
       });
     }).catch(() => {});
     trackingApi.listLinks(id, signal).then((r) => setTrackingLinks(r.data)).catch(() => {});
@@ -262,16 +221,11 @@ export default function ConversationsPage() {
       conversationsApi.get(id, signal).then((r) => setSelected(limitMessages(r.data))).catch(() => {});
     }, 5000);
 
-    return () => {
-      controller.abort();
-      clearInterval(interval);
-    };
+    return () => { controller.abort(); clearInterval(interval); };
   }, [selected?.id]);
 
   useEffect(() => {
-    return () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    };
+    return () => { if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current); };
   }, []);
 
   const lastMessageId = selected?.messages?.at(-1)?.id;
@@ -353,45 +307,67 @@ export default function ConversationsPage() {
   };
 
   const FILTERS = [
-    { key: "all", label: "Todas" },
-    { key: "ai_handling", label: "IA activa" },
+    { key: "all",            label: "Todas" },
+    { key: "ai_handling",    label: "IA activa" },
     { key: "human_assigned", label: "Agente" },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  return (
-    <div className="h-[calc(100vh-5rem)] flex flex-col gap-3">
+  const filteredConversations = searchQuery.trim()
+    ? conversations.filter((c) => {
+        const q = searchQuery.toLowerCase();
+        return (c.contact_name?.toLowerCase().includes(q) ?? false) || c.contact_phone.includes(q);
+      })
+    : conversations;
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    // Break out of the dashboard container's padding for a flush WhatsApp-like layout
+    <div
+      className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-4 sm:-mt-6 lg:-mt-8 flex flex-col overflow-hidden bg-white dark:bg-slate-900"
+      style={{ height: "calc(100vh - 4rem)" }}
+    >
       <Suspense fallback={null}>
         <DeepLinkOpener onOpen={openConversation} />
       </Suspense>
 
-      {/* Pipeline Bar */}
+      {/* ── Compact metrics bar ── */}
       <PipelineBar conversations={conversations} />
 
-      {/* Main layout */}
-      <div className="flex flex-1 gap-3 overflow-hidden min-h-0">
+      {/* ── Two-column chat layout ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* ── Conversations list ──────────────────────────────────────── */}
-        {/* On mobile: hidden when a conversation is selected */}
-        <div className={`flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden
-          ${selected ? "hidden md:flex" : "flex"}
-          w-full md:w-72 md:flex-shrink-0`}>
+        {/* ── LEFT: conversation list (300 px) ── */}
+        <div className={`flex-shrink-0 flex flex-col border-r border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900
+          ${selected ? "hidden md:flex" : "flex w-full"}
+          md:w-[300px]`}
+        >
+          {/* Sidebar header */}
+          <div className="px-4 pt-4 pb-3 space-y-3 border-b border-slate-100 dark:border-slate-700/50 flex-shrink-0">
+            <h1 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Conversaciones</h1>
 
-          {/* Header sidebar */}
-          <div className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700/50">
-            <h1 className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight">
-              Conversaciones
-            </h1>
-            <div className="flex gap-1 mt-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar conversación, contacto..."
+                className="w-full pl-8 pr-3 py-2 text-[12.5px] bg-slate-100 dark:bg-slate-800 rounded-full text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 transition"
+              />
+            </div>
+
+            {/* Filters */}
+            <div className="flex gap-1">
               {FILTERS.map((f) => (
                 <button
                   key={f.key}
                   onClick={() => setFilter(f.key)}
-                  className={`text-xs px-2.5 py-2 rounded-lg font-medium transition-all duration-150 cursor-pointer min-h-[36px] ${
+                  className={`text-[12px] px-3 py-1.5 rounded-full font-medium transition-all cursor-pointer ${
                     filter === f.key
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-slate-300"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
                   }`}
                 >
                   {f.label}
@@ -400,69 +376,65 @@ export default function ConversationsPage() {
             </div>
           </div>
 
-          {/* Lista */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
-            {conversations.length === 0 && (
+          {/* Conversation list */}
+          <div className="flex-1 overflow-y-auto">
+            {filteredConversations.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-slate-400 dark:text-slate-600" />
-                </div>
-                <p className="text-xs font-medium text-slate-400 dark:text-slate-600">
-                  Sin conversaciones
-                </p>
+                <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                <p className="text-[12px] text-slate-400 dark:text-slate-600">Sin conversaciones</p>
               </div>
             )}
-            {conversations.map((conv) => {
-              const initials = getInitials(conv.contact_name, conv.contact_phone);
+            {filteredConversations.map((conv) => {
+              const initials    = getInitials(conv.contact_name, conv.contact_phone);
               const avatarColor = getAvatarColor(conv.contact_phone);
-              const isActive = selected?.id === conv.id;
+              const isActive    = selected?.id === conv.id;
+              const preview     = conv.detected_intent ?? STATUS_LABELS[conv.status] ?? conv.contact_phone;
+              const timeLabel   = conv.last_message_at
+                ? formatDistanceToNow(new Date(conv.last_message_at), { locale: es })
+                : "";
               return (
                 <button
                   key={conv.id}
                   onClick={() => openConversation(conv.id)}
-                  className={`w-full text-left px-4 py-4 transition-colors cursor-pointer border-l-2 min-h-[72px] ${
+                  className={`w-full text-left px-4 py-3.5 flex items-center gap-3 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800/60 ${
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-600/10 border-blue-500"
-                      : "border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.03]"
+                      ? "bg-indigo-600"
+                      : "hover:bg-slate-50 dark:hover:bg-white/[0.03]"
                   }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${avatarColor}`}
-                    >
+                  {/* Avatar with status dot */}
+                  <div className="relative flex-shrink-0">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-bold ${avatarColor}`}>
                       {initials}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p
-                          className={`text-sm font-semibold truncate ${
-                            isActive
-                              ? "text-gray-900 dark:text-slate-100"
-                              : "text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          {conv.contact_name || conv.contact_phone}
-                        </p>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${
-                            STATUS_COLORS[conv.status] || "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {STATUS_LABELS[conv.status] || conv.status}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-600 truncate">
-                        {conv.contact_phone}
+                    <span
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 ${
+                        isActive ? "border-indigo-600" : "border-white dark:border-slate-900"
+                      } ${STATUS_DOT[conv.status] ?? "bg-slate-400"}`}
+                    />
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                      <p className={`text-[13.5px] font-semibold truncate ${
+                        isActive ? "text-white" : "text-slate-800 dark:text-slate-100"
+                      }`}>
+                        {conv.contact_name || conv.contact_phone}
                       </p>
-                      {conv.last_message_at && (
-                        <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
-                          {formatDistanceToNow(new Date(conv.last_message_at), {
-                            addSuffix: true,
-                            locale: es,
-                          })}
-                        </p>
+                      {timeLabel && (
+                        <span className={`text-[10.5px] flex-shrink-0 ${
+                          isActive ? "text-indigo-200" : "text-slate-400 dark:text-slate-500"
+                        }`}>
+                          {timeLabel}
+                        </span>
                       )}
                     </div>
+                    <p className={`text-[12px] truncate ${
+                      isActive ? "text-indigo-200" : "text-slate-500 dark:text-slate-500"
+                    }`}>
+                      {preview}
+                    </p>
                   </div>
                 </button>
               );
@@ -470,93 +442,81 @@ export default function ConversationsPage() {
           </div>
         </div>
 
-        {/* ── Chat detalle + Lead panel ─────────────────────────────── */}
+        {/* ── RIGHT: chat area ── */}
         {selected ? (
           <>
-            <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950">
 
-              {/* Back button – mobile only */}
+              {/* Mobile back */}
               <button
                 onClick={goBackToList}
-                className="md:hidden flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer min-h-[44px]"
+                className="md:hidden flex items-center gap-2 px-4 py-3 text-[13px] font-medium text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 hover:bg-slate-50 transition-colors cursor-pointer flex-shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Conversaciones
               </button>
 
-              {/* Header chat */}
-              <div className="px-4 md:px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between bg-white dark:bg-slate-900 gap-2 flex-wrap">
+              {/* Chat header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/50 flex-shrink-0 gap-3 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${getAvatarColor(
-                      selected.contact_phone
-                    )}`}
-                  >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 ${getAvatarColor(selected.contact_phone)}`}>
                     {getInitials(selected.contact_name, selected.contact_phone)}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-sm text-gray-900 dark:text-slate-100 leading-tight truncate">
+                    <h2 className="text-[14px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">
                       {selected.contact_name || selected.contact_phone}
+                    </h2>
+                    <p className="text-[11.5px] text-slate-500 dark:text-slate-500 flex items-center gap-1.5 leading-tight">
+                      <span className={`w-2 h-2 rounded-full inline-block flex-shrink-0 ${STATUS_DOT[selected.status] ?? "bg-slate-400"}`} />
+                      {STATUS_LABELS[selected.status]} · {selected.contact_phone}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-600">{selected.contact_phone}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span
-                    className={`text-[10px] px-2 py-1 rounded-full font-semibold ${
-                      STATUS_COLORS[selected.status] || "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {STATUS_LABELS[selected.status] || selected.status}
-                  </span>
-                  {/* Botón tracking */}
+                  {/* Tracking */}
                   <button
                     onClick={() => setShowTrackingModal((v) => !v)}
-                    className={`relative flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors cursor-pointer font-medium min-h-[36px] ${
+                    className={`relative flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-xl border font-medium cursor-pointer transition-colors ${
                       showTrackingModal
-                        ? "bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/30"
-                        : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-500/20"
+                        ? "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/25"
+                        : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                     }`}
                   >
-                    <Link2 className="w-3 h-3" />
-                    Links
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Links</span>
                     {trackingLinks.filter((l) => l.converted).length > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                         {trackingLinks.filter((l) => l.converted).length}
                       </span>
                     )}
                   </button>
+
                   {selected.status !== "human_assigned" && (
                     <button
                       onClick={handleAssign}
-                      className="flex items-center gap-1.5 text-xs px-3 py-2
-                        bg-amber-50 text-amber-700 border border-amber-200
-                        dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20
-                        rounded-lg hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors cursor-pointer font-medium min-h-[36px]"
+                      className="flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-xl border font-medium cursor-pointer transition-colors bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 hover:bg-amber-100 dark:hover:bg-amber-500/20"
                     >
-                      <UserCheck className="w-3 h-3" />
+                      <UserCheck className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Asignarme</span>
                     </button>
                   )}
+
                   <button
                     onClick={handleClose}
-                    className="flex items-center gap-1.5 text-xs px-3 py-2
-                      bg-slate-100 text-slate-600 border border-slate-200
-                      dark:bg-white/5 dark:text-slate-400 dark:border-white/10
-                      rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer font-medium min-h-[36px]"
+                    className="flex items-center gap-1.5 text-[12px] px-3 py-2 rounded-xl border font-medium cursor-pointer transition-colors bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Cerrar</span>
                   </button>
                 </div>
               </div>
 
-              {/* Panel de tracking */}
+              {/* Tracking panel */}
               {showTrackingModal && (
-                <div className="border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 px-4 md:px-5 py-4 space-y-3">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                    <Link2 className="w-3 h-3" />
+                <div className="border-b border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 px-5 py-4 space-y-3 flex-shrink-0">
+                  <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5" />
                     Links de seguimiento
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -564,36 +524,31 @@ export default function ConversationsPage() {
                       value={trackingUrl}
                       onChange={(e) => setTrackingUrl(e.target.value)}
                       placeholder="URL de destino (ej: https://tienda.cl/producto)"
-                      className="flex-1 text-xs px-3 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-base sm:text-xs"
+                      className="flex-1 text-[12px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition"
                     />
                     <div className="flex gap-2">
                       <input
                         value={trackingLabel}
                         onChange={(e) => setTrackingLabel(e.target.value)}
                         placeholder="Etiqueta (opcional)"
-                        className="flex-1 sm:w-32 text-xs px-3 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-gray-900 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-base sm:text-xs"
+                        className="flex-1 sm:w-32 text-[12px] px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition"
                       />
                       <button
                         onClick={generateTrackingLink}
                         disabled={generatingLink || !trackingUrl.trim()}
-                        className="text-xs px-3 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors cursor-pointer font-medium whitespace-nowrap min-h-[44px]"
+                        className="text-[12px] px-4 py-2 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors cursor-pointer font-medium whitespace-nowrap"
                       >
                         {generatingLink ? "..." : "Generar"}
                       </button>
                     </div>
                   </div>
                   {trackingLinks.length > 0 && (
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
                       {trackingLinks.map((link) => (
-                        <div
-                          key={link.token}
-                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60"
-                        >
+                        <div key={link.token} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${link.converted ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
                           <div className="flex-1 min-w-0">
-                            {link.label && (
-                              <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 truncate">{link.label}</p>
-                            )}
+                            {link.label && <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 truncate">{link.label}</p>}
                             <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">{link.tracking_url}</p>
                           </div>
                           {link.converted && (
@@ -603,64 +558,49 @@ export default function ConversationsPage() {
                           )}
                           <button
                             onClick={() => copyLink(link.tracking_url, link.token)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer flex-shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer flex-shrink-0"
                           >
-                            {copiedToken === link.token ? (
-                              <Check className="w-3 h-3 text-emerald-500" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
+                            {copiedToken === link.token
+                              ? <Check className="w-3 h-3 text-emerald-500" />
+                              : <Copy className="w-3 h-3" />
+                            }
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
                   {trackingLinks.length === 0 && (
-                    <p className="text-xs text-slate-400 dark:text-slate-600">Aún no hay links generados para esta conversación.</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-600">Aún no hay links generados para esta conversación.</p>
                   )}
                 </div>
               )}
 
-              {/* Mensajes */}
-              <div className="flex-1 overflow-y-auto px-4 md:px-5 py-5 space-y-4 bg-slate-50 dark:bg-slate-950/80">
+              {/* Messages area */}
+              <div className="flex-1 overflow-y-auto px-5 md:px-8 py-5 space-y-4">
                 {selected.messages.map((msg) => {
                   const isUser = msg.role === "user";
-                  const isAI = msg.role === "assistant";
+                  const timeStr = msg.created_at ? safeFormat(msg.created_at, "HH:mm") : "";
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isUser ? "justify-start" : "justify-end"}`}
-                    >
-                      <div
-                        className={`flex items-end gap-2 max-w-[85%] md:max-w-[72%] ${
-                          isUser ? "flex-row" : "flex-row-reverse"
-                        }`}
-                      >
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div key={msg.id} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
+                      <div className={`flex items-end gap-2 max-w-[78%] md:max-w-[65%] ${isUser ? "flex-row" : "flex-row-reverse"}`}>
+                        {/* Avatar — only for incoming messages */}
+                        {isUser && (
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${getAvatarColor(selected.contact_phone)}`}>
+                            {getInitials(selected.contact_name, selected.contact_phone)}
+                          </div>
+                        )}
+                        {/* Bubble + timestamp */}
+                        <div className={`flex flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
+                          <div className={`px-4 py-2.5 text-[13.5px] leading-relaxed ${
                             isUser
-                              ? "bg-slate-200 dark:bg-slate-700/60"
-                              : isAI
-                              ? "bg-indigo-100 dark:bg-indigo-900/60"
-                              : "bg-emerald-100 dark:bg-emerald-900/60"
-                          }`}
-                        >
-                          {isUser ? (
-                            <User className="w-3 h-3 text-gray-500 dark:text-slate-400" />
-                          ) : isAI ? (
-                            <Bot className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                          ) : (
-                            <UserCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100 dark:border-slate-700/40"
+                              : "bg-indigo-600 text-white rounded-2xl rounded-tr-sm shadow-sm shadow-indigo-900/20"
+                          }`}>
+                            {msg.content}
+                          </div>
+                          {timeStr && (
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 px-1">{timeStr}</span>
                           )}
-                        </div>
-                        <div
-                          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                            isUser
-                              ? "bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700/60"
-                              : "bg-indigo-600 text-white rounded-br-sm shadow-lg shadow-indigo-900/20"
-                          }`}
-                        >
-                          {msg.content}
                         </div>
                       </div>
                     </div>
@@ -669,34 +609,37 @@ export default function ConversationsPage() {
                 <div ref={bottomRef} />
               </div>
 
-              {/* Input respuesta */}
-              {selected.status !== "closed" && (
-                <div className="px-4 py-3.5 border-t border-slate-100 dark:border-slate-700/50 bg-white dark:bg-slate-900 flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && sendReply()}
-                    placeholder="Responder como agente…"
-                    className="flex-1 text-sm px-4 py-3
-                      bg-slate-100 border border-slate-200 text-slate-800
-                      dark:bg-slate-800 dark:border-slate-700/60 dark:text-slate-200
-                      rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500
-                      placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-shadow
-                      text-base md:text-sm"
-                  />
-                  <button
-                    onClick={sendReply}
-                    disabled={sending || !replyText.trim()}
-                    className="bg-indigo-600 text-white px-3.5 py-3 rounded-xl hover:bg-indigo-500 disabled:opacity-30 transition-colors cursor-pointer shadow-sm shadow-indigo-900/30 min-h-[48px] min-w-[48px] flex items-center justify-center"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
+              {/* Reply input */}
+              {selected.status !== "closed" ? (
+                <div className="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/50 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2.5 gap-2 focus-within:ring-2 focus-within:ring-indigo-500/20 transition">
+                      <input
+                        type="text"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendReply()}
+                        placeholder="Escribe un mensaje..."
+                        className="flex-1 bg-transparent text-[13.5px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={sendReply}
+                      disabled={sending || !replyText.trim()}
+                      className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 transition-colors cursor-pointer flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-900/25"
+                    >
+                      <Send className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-5 py-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/50 flex-shrink-0 text-center">
+                  <span className="text-[12px] text-slate-400 dark:text-slate-500">Conversación cerrada</span>
                 </div>
               )}
             </div>
 
-            {/* Lead pipeline panel – hidden on mobile */}
+            {/* Lead panel */}
             {leadInfo && (
               <div className="hidden lg:flex flex-shrink-0">
                 <LeadPanel
@@ -709,16 +652,16 @@ export default function ConversationsPage() {
             )}
           </>
         ) : (
-          /* Empty state – desktop only */
-          <div className="hidden md:flex flex-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700/50 flex-col items-center justify-center gap-4">
-            <div className="w-14 h-14 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center justify-center">
-              <MessageSquare className="w-7 h-7 text-slate-400 dark:text-slate-600" />
+          /* Empty state */
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-slate-950">
+            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-700/50 flex items-center justify-center">
+              <MessageSquare className="w-7 h-7 text-slate-300 dark:text-slate-600" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-slate-400">
+              <p className="text-[14px] font-semibold text-slate-500 dark:text-slate-400">
                 Selecciona una conversación
               </p>
-              <p className="text-xs text-slate-400 dark:text-slate-600 mt-1">
+              <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-1">
                 Los mensajes aparecerán aquí
               </p>
             </div>
