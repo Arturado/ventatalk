@@ -1,6 +1,7 @@
 # VentaTalk — SPEC General del Proyecto
 
 > Documento de referencia técnica y de producto. Actualizar antes de iniciar cualquier desarrollo nuevo.
+> Última actualización: Mayo 2026
 
 ---
 
@@ -12,17 +13,12 @@ VentaTalk es un agente de ventas IA para WhatsApp + CRM, orientado a PYMEs chile
 
 ## 2. Arquitectura de Subdominios
 
-| Subdominio | Repo | Propósito |
-|---|---|---|
-| `ventatalk.com` | `ventatalk-web` | Landing, planes, registro, checkout Stripe |
-| `app.ventatalk.com` | `ventatalk` (frontend) | Dashboard del cliente |
-| `api.ventatalk.com` | `ventatalk` (backend) | API FastAPI — compartida por todos |
-| `admin.ventatalk.com` | `ventatalk-admin` (nuevo) | Panel interno VentaTalk |
-
-### Notas de infraestructura
-- `api.ventatalk.com` reemplaza la exposición directa del puerto `8000`. Nginx hace proxy hacia el contenedor.
-- `admin.ventatalk.com` protegido con Basic Auth a nivel Nginx (antes de llegar a Next.js) + header `X-Robots-Tag: noindex, nofollow` + `robots.txt` con `Disallow: /`.
-- El backend es **uno solo**, compartido. Los tres frontends se autentican contra él con JWT. El rol del token determina qué puede hacer cada uno (`client`, `superadmin`).
+| Subdominio | Repo | Puerto | Propósito |
+|---|---|---|---|
+| `ventatalk.com` | `ventatalk-web` | 3001 | Landing, planes, registro, checkout Stripe |
+| `app.ventatalk.com` | `ventatalk` (frontend) | 3000 | Dashboard del cliente |
+| `api.ventatalk.com` | `ventatalk` (backend) | 8000 | API FastAPI — compartida por todos |
+| `admin.ventatalk.com` | `ventatalk-admin` | 3002 | Panel interno VentaTalk (superadmin) |
 
 ---
 
@@ -32,16 +28,20 @@ VentaTalk es un agente de ventas IA para WhatsApp + CRM, orientado a PYMEs chile
 |---|---|---|
 | `ventatalk` | github.com/Arturado/ventatalk | Activo — app + backend |
 | `ventatalk-web` | github.com/Arturado/ventatalk-web | Activo — landing |
-| `ventatalk-admin` | Por crear | Panel interno |
+| `ventatalk-admin` | github.com/Arturado/ventatalk-admin | Activo — panel superadmin (MVP en progreso) |
 
 ### Estructura en VPS (`/home/hanowar/`)
 ```
 ventatalk/              ← repo principal (backend + frontend app)
 ventatalk-web/          ← landing ventatalk.com
+ventatalk-admin/        ← panel superadmin
 wordpress-agencia-dn/   ← instancia WordPress cliente (no tocar)
-deploy.sh               ← deploy manual ventatalk
-deploy-web.sh           ← deploy manual ventatalk-web
 ```
+
+### Deploy automático
+- Cada repo tiene `.github/workflows/deploy.yml`
+- Push a `main` → GitHub Actions → SSH al VPS → `git stash + git pull + docker compose up --build`
+- Secrets en GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT`
 
 ---
 
@@ -56,277 +56,253 @@ deploy-web.sh           ← deploy manual ventatalk-web
 
 ### Frontend (app + admin)
 - Next.js + Tailwind CSS
-- Auth con JWT
+- Auth con JWT (localStorage + cookie `admin_token` para el admin)
+- `output: "standalone"` en `next.config.ts`
 
 ### Infraestructura
-- VPS único (por ahora)
+- VPS único IP `179.43.124.82` (Donweb)
 - Docker Compose por proyecto
-- Nginx como reverse proxy
-- CI/CD: deploy scripts manuales por ahora → migrar a GitHub Actions
+- Nginx como reverse proxy + SSL Certbot
+- `admin.ventatalk.com` con `X-Robots-Tag: noindex, nofollow`
+- Swap 2GB configurado en VPS
+- CI/CD: GitHub Actions
 
 ---
 
-## 5. Contenedores en Producción (estado actual)
+## 5. Variables de Entorno
 
+### Estructura
+- Local: `.env.development` (no va al repo)
+- VPS: `.env.production` (no va al repo)
+- Repo: `.env.example` (sin valores reales)
+
+### Variables clave de producción (VPS)
 ```
-ventatalk-frontend-1     → puerto 3000  (app.ventatalk.com)
-ventatalk-api-1          → puerto 8000  (→ mover a api.ventatalk.com)
-ventatalk-worker-1       → Celery worker
-ventatalk-beat-1         → Celery beat
-ventatalk-redis-1        → Redis
-ventatalk-db-1           → PostgreSQL + pgvector
-ventatalk-web-web-1      → puerto 3001  (ventatalk.com)
-wordpress-agencia-dn-*   → WordPress cliente (no tocar)
+APP_ENV=production
+APP_URL=https://app.ventatalk.com
+API_URL=https://api.ventatalk.com
+NEXT_PUBLIC_API_URL=https://api.ventatalk.com
+SUPERADMIN_EMAIL=admin@ventatalk.com
 ```
 
 ---
 
-## 6. Módulos — `app.ventatalk.com` (Dashboard Cliente)
+## 6. Modelo de DB — Estado Actual
 
-### Estado actual: funcional pero UI/UX a rediseñar completamente
+### Migraciones aplicadas
+- `001_initial` — tablas base
+- `002_catalog_integrations`
+- `003_business_integrations`
+- `004_conversion_tokens`
+- `005_plan_catalog_limit`
+- `006_add_billing_features_channel` — billing, features JSONB, channel en conversaciones
 
-| Módulo | Estado | Notas |
-|---|---|---|
-| Auth (login/sesión) | ✅ Funciona | |
-| Conversaciones WhatsApp | ✅ Funciona | Falta mostrar pipeline status inline |
-| CRM / Lead pipeline | ✅ Funciona | |
-| Catálogo de productos | ✅ Funciona | Con toggles de visibilidad IA por producto |
-| Integración Jumpseller | ✅ Funciona | 15 productos Pace Coffee synced |
-| Integración Bsale | ⚠️ Parcial | 161/35,224 productos (límite 500 por costo embeddings) |
-| Integración WordPress | ❌ Pendiente | Ver sección 9 |
-| Follow-up automático | ✅ Funciona | Vía Celery beat |
-| Planes / Billing | ❌ Pendiente | Mover lógica a ventatalk.com + Stripe |
-| Conversion tracking | ❌ Pendiente | Parámetro `?vt_conv=` |
+### Modelos principales
+- `Business` — tenant (cliente del SaaS)
+- `PhoneNumber` — números WhatsApp por tenant
+- `Contact` — clientes del negocio
+- `Conversation` — hilos de conversación (campo `channel`: whatsapp/instagram)
+- `Message` — mensajes individuales
+- `Lead` — pipeline de ventas
+- `CatalogItem` — productos con embeddings pgvector
+- `FollowUpSequence/Step/Log` — secuencias de seguimiento
+- `ConversionToken` — tracking de conversiones `?vt_conv=`
+
+### Campos importantes en Business
+```python
+plan: PlanType          # starter | pro | max
+billing_cycle: str      # monthly | annual
+stripe_customer_id: str
+stripe_subscription_id: str
+features: JSONB         # features activos por plan + add-ons
+conversations_this_month: int
+conversations_reset_at: datetime
+max_phone_numbers: int
+max_conversations_per_month: int
+```
 
 ---
 
-## 7. Módulos — `admin.ventatalk.com` (Panel Interno)
+## 7. Planes y Pricing
 
-> Repo nuevo: `ventatalk-admin`. Stack: Next.js + Tailwind. Auth: JWT con rol `superadmin`.
-
-| Módulo | Descripción |
-|---|---|
-| Vista de tenants | Lista de todos los clientes activos/inactivos |
-| Detalle de tenant | Plan activo, integraciones conectadas, uso de productos/embeddings |
-| Control de planes | Activar/desactivar features por cliente manualmente |
-| Estado de integraciones | Ver si Bsale/Jumpseller/WordPress está conectado y cuándo fue el último sync |
-| Métricas globales | Conversaciones totales, leads generados, conversiones |
-| Gestión de usuarios | Crear/desactivar cuentas de clientes |
-| Logs de sistema | Errores de webhooks, fallos de sync, etc. |
-
----
-
-## 8. `ventatalk.com` — Landing + Billing
-
-### Lo que vive acá (además del marketing):
-- Página de planes y precios
-- Registro de nuevos clientes
-- Checkout con Stripe (suscripciones)
-- Webhooks de Stripe (`/api/stripe/webhook`)
-- Portal de cliente Stripe (cambio de plan, facturas)
-
-### Definición de "conversación":
-> Un **hilo completo** con un cliente (no mensajes individuales). El contador se incrementa cuando se inicia un nuevo hilo, no por cada mensaje dentro de él.
-
-### Planes base:
+### Planes base
 
 | | Starter | Pro | MAX |
 |---|---|---|---|
 | Precio mensual | $90 USD | $190 USD | $499 USD |
 | Precio anual | $900 USD | $1,900 USD | $4,790 USD |
-| Descuento anual | ~17% (2 meses gratis) | ~17% | ~20% |
-| Conversaciones incluidas | 200 | 1,000 | 3,000 |
-| Conv. adicional | $0.40 USD | $0.40 USD | $0.30 USD |
-| Tiendas conectadas | 1 | 1 | 1 |
+| Conversaciones | 200 | 1,000 | 3,000 |
+| Conv. adicional | $0.40 | $0.40 | $0.30 |
 | Números WhatsApp | 1 | 3 | 4 |
 | Carritos abandonados | ✅ | ✅ | ✅ |
 | Campañas outbound | ❌ | ✅ | ✅ |
 | Módulo Reviews | ❌ | ✅ | ✅ |
-| Módulo B2B / Cotizaciones | ❌ | ❌ | ✅ |
-| Soporte | Estándar | WhatsApp | WhatsApp + Reuniones |
+| Módulo B2B | ❌ | ❌ | ✅ |
 
-> Descuento anual es promoción de lanzamiento 2025-2026. Se ajusta el año siguiente.
-
-### Add-ons (sobre cualquier plan):
-
-| Add-on | Precio USD/mes |
+### Add-ons
+| Add-on | USD/mes |
 |---|---|
 | Tienda adicional | $150 |
-| Número WhatsApp adicional | $20 |
-| Bolsa conversaciones extra | $150 |
-| Módulo MercadoLibre | $150 |
-| Canal Instagram | $20 |
-
-> Add-ons son Stripe Products separados ligados al `subscription_id` del tenant. El webhook de Stripe actualiza los `features` del tenant en DB al activar/desactivar.
-
-### Módulos de producto por desarrollar (en orden de prioridad):
-
-#### Carritos abandonados
-- El agente detecta cuando un cliente inició una consulta de compra pero no completó
-- Envía follow-up automático vía WhatsApp (ya tenemos Celery beat — extender esta lógica)
-- **Estado: por desarrollar**
-
-#### Campañas outbound / WhatsApp Marketing (Plan Pro+)
-- Envío masivo a contactos del CRM
-- Opciones a evaluar: integración con Mailchimp del cliente vs servicio propio
-- **Restricción importante:** WhatsApp Business API tiene políticas estrictas sobre mensajes outbound — solo se pueden enviar con templates aprobados por Meta. Investigar antes de comprometerse con el cliente.
-- **Estado: por definir + desarrollar**
-
-#### Módulo Reviews (Plan Pro+)
-- El agente solicita reseña al cliente al finalizar una compra/conversación
-- Puede redirigir a Google Maps, Trustpilot u otro según config del tenant
-- **Estado: por desarrollar**
-
-#### Módulo B2B / Agente de Cotizaciones (Plan MAX)
-- El agente puede generar cotizaciones formales (PDF y/o email) o responder precios por WhatsApp
-- El cliente elige qué modalidad habilitar desde su dashboard
-- **Estado: por desarrollar**
-
-### Flujo de registro:
-1. Usuario llega a `ventatalk.com/planes`
-2. Elige plan + ciclo (mensual/anual) + add-ons opcionales → Stripe Checkout
-3. Pago exitoso → webhook Stripe crea tenant en DB con `features` correspondientes
-4. Se envía email con credenciales para `app.ventatalk.com`
-5. Cliente gestiona plan/add-ons desde portal Stripe o desde `app.ventatalk.com`
-
-### Repo: `ventatalk-web`
-- `docker-compose.yml` actualmente **solo existe en el VPS**, no commiteado → **corregir**
-- `NEXT_PUBLIC_API_URL` hardcodeado como build arg → actualizar a `api.ventatalk.com` cuando se migre
+| WhatsApp adicional | $20 |
+| Bolsa conversaciones | $150 |
+| MercadoLibre | $150 |
+| Instagram | $20 |
 
 ---
 
-## 9. Integración WordPress
+## 8. Endpoints Backend — Estado Actual
 
-### Modelo actual (incorrecto):
-VentaTalk se conecta al WordPress del cliente y hace pull de productos.
+### Auth (`/api/v1/auth/`)
+- `POST /login` — OAuth2PasswordRequestForm
+- `POST /register`
+- `POST /refresh`
+- `GET /me`
 
-### Modelo objetivo:
-**Plugin WordPress** instalado en el sitio del cliente que hace **push hacia `api.ventatalk.com`** cuando hay cambios (productos nuevos, actualizaciones, eliminaciones).
+### Business (`/api/v1/business/`)
+- `GET/PUT /profile`
+- `GET /catalog`
+- `POST /catalog` (upload CSV)
+- `GET /usage`
 
-### Flujo:
-1. Cliente instala plugin en su WordPress
-2. Plugin recibe webhook key única por tenant
-3. En cada cambio de producto → POST a `api.ventatalk.com/webhooks/wordpress/{tenant_key}`
-4. API procesa, genera embeddings, guarda en catálogo
+### Conversaciones, Contactos, Leads, Analytics
+- CRUD completo implementado
 
-### Ventajas:
-- No se necesitan credenciales del WordPress del cliente
-- Sync en tiempo real sin polling
-- Lógica de re-sync manual disponible desde el dashboard
+### Integraciones (`/api/v1/integrations/`)
+- Jumpseller: connect, sync, status, disconnect
+- Bsale: connect, sync, status, disconnect, price-lists
+- Shopify: connect, sync, status, disconnect
+- MercadoLibre: connect, sync, status, disconnect
+- WooCommerce: token, status, ingest, revoke
+
+### Billing (`/api/v1/billing/`)
+- `POST /create-checkout-session`
+- `POST /webhook` (Stripe)
+- `GET /portal`
+- Maneja: checkout.session.completed, subscription.updated, subscription.deleted
+
+### Tracking (`/api/v1/`)
+- `POST /conversations/{id}/tracking-link`
+- `GET /conversations/{id}/tracking-links`
+- `GET /track/{token}` (público, redirige)
+
+### Admin (`/api/v1/admin/`) ← NUEVO
+- `GET /stats/overview`
+- `GET /businesses?page=&search=&limit=`
+- `GET /businesses/{id}`
+- `PATCH /businesses/{id}/features`
+- `PATCH /businesses/{id}/plan`
+- Requiere: JWT + email == SUPERADMIN_EMAIL
+
+### Webhook (`/webhook/`)
+- WhatsApp inbound messages
+
+### Chat Widget (`/api/v1/chat/widget`)
+- Chat público para ventatalk.com
 
 ---
 
-## 10. Pendientes Técnicos Priorizados
+## 9. Frontend `app.ventatalk.com` — Secciones
 
-### P0 — Crítico (bloquea arquitectura)
-- [ ] Configurar `api.ventatalk.com` en Nginx (quitar exposición directa puerto 8000)
-- [ ] Separar `.env.production` y `.env.development`
-- [ ] Commitear `docker-compose.yml` de `ventatalk-web` al repo
+| Sección | Path | Estado |
+|---|---|---|
+| Login | `/auth/login` | ✅ |
+| Dashboard overview | `/dashboard` | ✅ |
+| Conversaciones | `/dashboard/conversations` | ✅ |
+| Contactos | `/dashboard/contacts` | ✅ |
+| Leads / Pipeline | `/dashboard/leads` | ✅ |
+| Integraciones | `/dashboard/integrations` | ✅ |
+| Configuración | `/dashboard/settings` | ✅ |
 
-### P1 — Alta prioridad (producto)
-- [ ] Crear repo `ventatalk-admin` con estructura base
-- [ ] Mover lógica de planes/billing a `ventatalk.com` + Stripe (con planes Starter/Pro/MAX)
-- [ ] Modelo de `features` por tenant en DB (controlar qué módulos tiene activos cada cliente)
-- [ ] Contador de conversaciones por tenant (hilo completo, no mensajes)
-- [ ] Bsale: reemplazar fetch por variante con bulk price list
-- [ ] Pipeline status visible dentro de conversaciones
-- [ ] Campo `channel` en conversaciones (whatsapp / instagram) + filtro en UI
+**Pendiente de rediseño completo con Claude Design.**
 
-### P2 — Media prioridad
+---
+
+## 10. Frontend `admin.ventatalk.com` — Estado
+
+| Sección | Path | Estado |
+|---|---|---|
+| Login | `/auth/login` | ✅ funcional |
+| Dashboard stats | `/dashboard` | ✅ implementado, pendiente verificar |
+| Lista clientes | `/dashboard/clientes` | ✅ implementado, pendiente verificar |
+| Detalle cliente | `/dashboard/clientes/[id]` | ✅ implementado, pendiente verificar |
+
+**Bug conocido:** El middleware de Next.js estaba nombrado `proxy` en lugar de `middleware` — ya corregido. Verificar flujo completo de login → dashboard.
+
+---
+
+## 11. Integraciones de Catálogo
+
+| Integración | Tipo | Estado |
+|---|---|---|
+| Jumpseller | Pull (API) | ✅ Funcionando — Pace Coffee 15 productos |
+| Bsale | Pull (API) | ✅ Funcionando — 161 productos (límite 500) |
+| WooCommerce | Push (plugin WordPress) | ✅ Plugin instalado en cliente |
+| Shopify | Pull (API) | ✅ Implementado, sin cliente activo |
+| MercadoLibre | Pull (API) | ✅ Implementado, sin cliente activo |
+
+### Plugin WordPress (`ventatalk`)
+- Path en repo: `scripts/wordpress-plugin/ventatalk/`
+- Funciones: widget WhatsApp, sync manual catálogo, sync automático en tiempo real (hooks WooCommerce)
+- Configuración: token API + URL servidor en WordPress admin
+
+---
+
+## 12. Workers Celery
+
+| Task | Trigger | Función |
+|---|---|---|
+| Follow-up sequences | Beat scheduler | Envía mensajes de seguimiento |
+| Reset conversaciones | Día 1 de cada mes 00:05 UTC | Resetea `conversations_this_month` |
+| Embeddings WooCommerce | Background tras ingest | Genera embeddings para productos nuevos |
+
+---
+
+## 13. Canal Instagram (Add-on — Pendiente)
+
+- Mismo agente IA respondiendo Instagram DM
+- $20 USD/mes add-on
+- Stack: Meta Graph API, permiso `instagram_manage_messages`
+- CRM unificado con filtro por canal (whatsapp/instagram)
+- Requiere review de Meta para producción
+
+---
+
+## 14. Pendientes Técnicos
+
+### Críticos
+- [ ] Verificar flujo completo login → dashboard en `admin.ventatalk.com`
+- [ ] Frontend `app.ventatalk.com` cae solo (OOM) — swap 2GB + mem_limit 1.5g aplicados, monitorear
+
+### Alta prioridad
+- [ ] Rediseño completo frontend `app.ventatalk.com` con Claude Design
+- [ ] Completar `ventatalk-admin` — verificar todas las pantallas
+
+### Media prioridad
 - [ ] Módulo carritos abandonados (extender Celery beat)
 - [ ] Módulo Reviews (solicitar reseña al cierre de conversación)
-- [ ] Plugin WordPress (push → API)
-- [ ] Deploy automático con GitHub Actions (por repo)
-- [ ] Conversion tracking `?vt_conv=`
-- [ ] `NEXT_PUBLIC_API_URL` como build arg en Dockerfile (ventatalk-web)
-- [ ] Guardar secrets sensibles en GitHub Secrets
+- [ ] Conversion tracking `?vt_conv=` — lógica frontend pendiente
 
-### P3 — Backlog
-- [ ] Integración Shopify
-- [ ] Integración MercadoLibre (add-on $150)
-- [ ] Canal Instagram DM (add-on $20) — ver sección 14
-- [ ] Optimización costos embeddings (batch processing, caché)
-- [ ] Límite de productos Bsale por plan (no fijo en 500)
-- [ ] Add-ons: número WhatsApp adicional, tienda adicional, bolsa conversaciones
+### Backlog
+- [ ] GitHub Actions para `ventatalk-admin` (falta deploy key en repo)
+- [ ] Bsale bulk price list (fix precios faltantes por variante)
+- [ ] Límite productos Bsale dinámico por plan
+- [ ] Módulo B2B / Cotizaciones
+- [ ] Canal Instagram DM
 
 ---
 
-## 11. Deploy Automático (GitHub Actions)
-
-> Cada repo tiene su propio workflow independiente.
-
-### Flujo objetivo por repo:
-```
-push a main
-  → GitHub Actions
-    → SSH al VPS
-      → git pull
-      → docker compose build
-      → docker compose up -d
-```
-
-### Archivos a crear por repo:
-- `.github/workflows/deploy.yml`
-- Secrets en GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
-
-### Scripts actuales en VPS:
-- `deploy.sh` → ventatalk
-- `deploy-web.sh` → ventatalk-web
-
-Estos scripts pueden ser la base de los steps de GitHub Actions.
-
----
-
-## 12. Seguridad
-
-- [ ] Basic Auth en Nginx para `admin.ventatalk.com`
-- [ ] `X-Robots-Tag: noindex, nofollow` en `admin.ventatalk.com`
-- [ ] Rate limiting en `api.ventatalk.com` a nivel Nginx
-- [ ] CORS configurado explícitamente por origen (`app.`, `admin.`, `ventatalk.com`)
-- [ ] Fernet encryption para tokens de integración (ya implementado)
-- [ ] Tokens mostrados solo como hint `...xxxx` en UI (ya implementado)
-
----
-
-## 13. Decisiones Técnicas Clave
+## 15. Decisiones Técnicas Clave
 
 | Decisión | Razón |
 |---|---|
-| Backend compartido entre los 3 frontends | Evita duplicar lógica, un solo punto de verdad |
-| Plugin push para WordPress (no pull) | No requiere credenciales del cliente, sync en tiempo real |
-| Admin en repo separado | Deploy independiente, permisos separados, ciclos de release distintos |
-| Stripe vive en ventatalk.com | Separa concern de marketing/billing del dashboard operativo |
-| Límite 500 productos Bsale | Costo de embeddings OpenAI — ajustar por plan cuando esté billing |
-| Conversación = hilo completo | No por mensaje — más justo para el cliente, más fácil de contar |
-| Instagram en CRM unificado | Misma vista con filtro de canal — no sección separada |
-| Campañas outbound: evaluar primero políticas Meta | WhatsApp solo permite outbound con templates aprobados — validar antes de prometer |
-| Features por tenant en DB | Permite activar/desactivar módulos por plan sin redesplegar código |
-
----
-
-## 14. Canal Instagram (Add-on $20 USD/mes)
-
-### Concepto:
-El mismo agente IA responde **Instagram Direct Messages** como canal de venta adicional. No es una sección separada — las conversaciones de Instagram se unifican en el mismo CRM con un identificador de canal (`whatsapp` / `instagram`) y filtro por canal en la vista.
-
-### Stack técnico:
-- **Meta Graph API** — mismo ecosistema que WhatsApp Business API
-- Webhook → `api.ventatalk.com/webhooks/instagram/{tenant_key}`
-- Mismo pipeline RAG + GPT-4o-mini
-- Conversaciones unificadas: mismo hilo/vista con ícono de canal
-
-### Consideraciones técnicas:
-- Requiere **Instagram Business Account** vinculada a Facebook Page
-- Permiso `instagram_manage_messages` requiere review de Meta para producción
-- Ventana de mensajería 24h igual que WhatsApp
-- Conexión desde `app.ventatalk.com` → Integraciones (mismo flujo que WhatsApp)
-
-### Módulos afectados:
-- Backend → nuevo webhook handler + adaptador de canal
-- CRM → campo `channel` en conversaciones + filtro UI
-- `app.ventatalk.com` → Integraciones: conectar cuenta Instagram
-- `admin.ventatalk.com` → visibilidad de qué tenants tienen Instagram activo
-
----
-
-*Última actualización: Mayo 2026*
+| Backend compartido entre los 3 frontends | Un solo punto de verdad |
+| Plugin push para WordPress (no pull) | No requiere credenciales del cliente |
+| Admin en repo separado | Deploy independiente |
+| Stripe vive en ventatalk.com | Separa billing del dashboard operativo |
+| Conversación = hilo completo | No por mensaje — más justo para el cliente |
+| Instagram en CRM unificado | Misma vista con filtro de canal |
+| Features por tenant en JSONB | Activar/desactivar módulos sin redesplegar |
+| SUPERADMIN_EMAIL en .env | Más simple y seguro que campo en DB para MVP |
+| `asyncpg enum casing bug` | Fix: `values_callable=lambda x: [e.value for e in x]` en todos los Enum columns |
+| `bcrypt` | Pin `bcrypt==4.0.1` |
+| `git stash` en deploy | Evita conflictos cuando se editan archivos directo en VPS |
