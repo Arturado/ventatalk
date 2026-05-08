@@ -224,7 +224,7 @@ export const businessApi = {
   },
   getCatalog:          () => api.get("/api/v1/business/catalog"),
   toggleCatalogItem:   (itemId: string, isAvailable: boolean) =>
-    api.patch(`/api/v1/business/catalog/${itemId}`, { is_available: isAvailable }),
+    api.patch(`/api/v1/business/catalog/${itemId}/toggle`, { is_available: isAvailable }),
   updateProfile: (data: object) => api.put("/api/v1/business/profile", data),
   usage:         (signal?: AbortSignal) => api.get<UsageData>("/api/v1/business/usage", { signal }),
 };
