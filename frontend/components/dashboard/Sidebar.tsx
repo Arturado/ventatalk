@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard, MessageSquare, Users,
   TrendingUp, Settings, LogOut, Bot, Zap, X,
+  Package, ShoppingCart, Tag,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import { businessApi, type UsageData } from "@/lib/api";
@@ -17,6 +18,14 @@ const NAV_GROUPS = [
       { href: "/dashboard/conversations", label: "Conversaciones", icon: MessageSquare },
       { href: "/dashboard/contacts", label: "Contactos", icon: Users },
       { href: "/dashboard/leads", label: "Pipeline", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Ecommerce",
+    items: [
+      { href: "/dashboard/ecommerce/productos", label: "Productos", icon: Package },
+      { href: "/dashboard/ecommerce/orders", label: "Órdenes", icon: ShoppingCart },
+      { href: "/dashboard/ecommerce/cupones", label: "Cupones", icon: Tag },
     ],
   },
   {
