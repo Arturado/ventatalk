@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { businessApi } from "@/lib/api";
 import { Package } from "lucide-react";
 
@@ -17,6 +18,7 @@ interface CatalogItem {
 export default function ProductosPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     businessApi
@@ -26,12 +28,29 @@ export default function ProductosPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  function toggleAvailable(id: string) {
+  async function toggleAvailable(id: string, currentValue: boolean) {
+    if (toggling.has(id)) return;
+
+    const newValue = !currentValue;
+    setToggling((prev) => new Set(prev).add(id));
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, is_available: !item.is_available } : item
-      )
+      prev.map((item) => (item.id === id ? { ...item, is_available: newValue } : item))
     );
+
+    try {
+      await businessApi.toggleCatalogItem(id, newValue);
+    } catch {
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, is_available: currentValue } : item))
+      );
+      toast.error("No se pudo actualizar el producto. Intenta de nuevo.");
+    } finally {
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
   if (loading) {
@@ -121,10 +140,15 @@ export default function ProductosPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <button
-                        onClick={() => toggleAvailable(item.id)}
+                        onClick={() => toggleAvailable(item.id, item.is_available)}
                         role="switch"
                         aria-checked={item.is_available}
-                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                        disabled={toggling.has(item.id)}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                          toggling.has(item.id)
+                            ? "cursor-not-allowed opacity-50"
+                            : "cursor-pointer"
+                        } ${
                           item.is_available
                             ? "bg-blue-600"
                             : "bg-slate-200 dark:bg-slate-600"
