@@ -101,6 +101,7 @@ class WooCommerceProduct(BaseModel):
     category: Optional[str] = None
     image_url: Optional[str] = None
     is_available: bool = True
+    stock_quantity: Optional[int] = None
 
 
 class WooCommerceIngestRequest(BaseModel):
@@ -640,7 +641,7 @@ async def woocommerce_ingest(
             item.category     = prod.category
             item.is_available = prod.is_available
             if prod.image_url:
-                item.metadata_ = {**(item.metadata_ or {}), "image_url": prod.image_url}
+                item.metadata_ = {**(item.metadata_ or {}), "image_url": prod.image_url, "stock_quantity": prod.stock_quantity}
             updated += 1
         else:
             db.add(CatalogItem(
@@ -652,7 +653,7 @@ async def woocommerce_ingest(
                 is_available = prod.is_available,
                 source       = "woocommerce",
                 external_id  = prod.external_id,
-                metadata_    = {"image_url": prod.image_url} if prod.image_url else {},
+                metadata_    = {"image_url": prod.image_url, "stock_quantity": prod.stock_quantity} if (prod.image_url or prod.stock_quantity is not None) else {},
             ))
             created += 1
 
