@@ -130,7 +130,15 @@ export default function ProductosPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       {item.stock_quantity == null ? (
-                        <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+                        item.is_available ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            En stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                            Sin stock
+                          </span>
+                        )
                       ) : item.stock_quantity === 0 ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400">
                           Sin stock
