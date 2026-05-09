@@ -439,3 +439,62 @@ class ConversionToken(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_conversion_tokens_business", "business_id"),
     )
+
+
+# ────────────────────────────────────────────────────────────────────
+# ORDER (pedidos sincronizados desde plataformas ecommerce)
+# ────────────────────────────────────────────────────────────────────
+
+class Order(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "orders"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
+    source: Mapped[str] = mapped_column(String(50), nullable=False)          # woocommerce | jumpseller | bsale | shopify
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    order_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending")       # pending | processing | completed | cancelled | refunded
+    total: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="CLP")
+    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    customer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    customer_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    items: Mapped[Optional[dict]] = mapped_column(JSONB, default=list)       # [{name, qty, price, sku}]
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ordered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    business: Mapped["Business"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("business_id", "source", "external_id", name="uq_order_business_source_external"),
+        Index("ix_order_business", "business_id"),
+    )
+
+
+# ────────────────────────────────────────────────────────────────────
+# COUPON (cupones sincronizados desde plataformas ecommerce)
+# ────────────────────────────────────────────────────────────────────
+
+class Coupon(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "coupons"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("businesses.id", ondelete="CASCADE"))
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    code: Mapped[str] = mapped_column(String(100), nullable=False)
+    discount_type: Mapped[str] = mapped_column(String(50), default="percent")  # percent | fixed
+    discount_value: Mapped[float] = mapped_column(Float, default=0)
+    min_order_amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    usage_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    business: Mapped["Business"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("business_id", "source", "code", name="uq_coupon_business_source_code"),
+        Index("ix_coupon_business", "business_id"),
+    )
