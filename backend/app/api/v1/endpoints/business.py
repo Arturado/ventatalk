@@ -322,7 +322,7 @@ async def get_catalog(
             is_available=item.is_available,
             source=item.source,
             image_url=(item.metadata_ or {}).get("image_url"),
-            stock_quantity=(item.metadata_ or {}).get("stock"),
+            stock_quantity=(item.metadata_ or {}).get("stock_quantity"),
         )
         for item in items
     ]
