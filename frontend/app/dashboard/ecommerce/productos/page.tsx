@@ -2,23 +2,14 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { businessApi } from "@/lib/api";
+import { businessApi, type CatalogItem } from "@/lib/api";
 import { Package } from "lucide-react";
-
-interface CatalogItem {
-  id: string;
-  name: string;
-  description?: string;
-  price?: number;
-  category?: string;
-  is_available: boolean;
-  source?: string;
-}
 
 export default function ProductosPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<Set<string>>(new Set());
+  const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     businessApi
@@ -108,17 +99,47 @@ export default function ProductosPage() {
                     className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
                   >
                     <td className="px-5 py-3.5 max-w-xs">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {item.name}
-                      </p>
-                      {item.category && (
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                          {item.category}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {item.image_url && !imgErrors.has(item.id) ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 rounded object-cover flex-shrink-0 bg-slate-100 dark:bg-slate-700"
+                            onError={() =>
+                              setImgErrors((prev) => new Set(prev).add(item.id))
+                            }
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded flex-shrink-0 bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                            {item.name}
+                          </p>
+                          {item.category && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                              {item.category}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+                      {item.stock_quantity == null ? (
+                        <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+                      ) : item.stock_quantity === 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                          Sin stock
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                          {item.stock_quantity}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="text-sm text-slate-700 dark:text-slate-300">

@@ -4,7 +4,7 @@ import { authApi, businessApi, phoneNumbersApi, billingApi } from "@/lib/api";
 import api from "@/lib/api";
 import {
   Bot, Upload, Phone, Save, CheckCircle2,
-  EyeOff, Search, RefreshCw, Database,
+  EyeOff, RefreshCw, Database,
   FileSpreadsheet, ShoppingBag, AlertTriangle, Globe,
   Plus, Trash2, Eye, Bell, BellOff, BellRing,
   CreditCard, ExternalLink, Loader2,
@@ -21,15 +21,6 @@ interface PhoneNumber {
   display_name: string;
   waba_id: string;
   is_active: boolean;
-}
-
-interface CatalogItem {
-  id: string;
-  name: string;
-  price: number | null;
-  category: string | null;
-  is_available: boolean;
-  source?: string;
 }
 
 interface CatalogSource {
@@ -88,16 +79,14 @@ const labelCls = "text-xs font-semibold text-slate-600 dark:text-slate-400 block
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [catalogSource, setCatalogSource] = useState<CatalogSource | null>(null);
   const [uploading, setUploading] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [changingSource, setChangingSource] = useState(false);
   const [confirmSource, setConfirmSource] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [filterAvailable, setFilterAvailable] = useState<"all" | "active" | "hidden">("all");
-  const [toggling, setToggling] = useState<string | null>(null);
+  const [confirmDeleteSource, setConfirmDeleteSource] = useState<string | null>(null);
+  const [deletingSource, setDeletingSource] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // WhatsApp phone numbers
@@ -115,7 +104,6 @@ export default function SettingsPage() {
   });
 
   const loadCatalog = () => {
-    businessApi.getCatalog().then((r) => setCatalog(r.data));
     api.get("/api/v1/business/catalog/source").then((r) => setCatalogSource(r.data));
   };
 
@@ -155,7 +143,10 @@ export default function SettingsPage() {
   };
 
   const changeSource = (source: string) => {
-    if (source === catalogSource?.active_source) return;
+    if (source === catalogSource?.active_source) {
+      setConfirmDeleteSource(source);
+      return;
+    }
     setConfirmSource(source);
   };
 
@@ -174,6 +165,22 @@ export default function SettingsPage() {
     }
   };
 
+  const deleteSource = async () => {
+    if (!confirmDeleteSource) return;
+    const source = confirmDeleteSource;
+    setDeletingSource(true);
+    try {
+      await businessApi.deleteCatalogSource(source);
+      toast.success(`Productos de ${SOURCE_INFO[source]?.label} eliminados`);
+      setConfirmDeleteSource(null);
+      loadCatalog();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Error eliminando productos");
+    } finally {
+      setDeletingSource(false);
+    }
+  };
+
   const uploadCatalog = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -187,20 +194,6 @@ export default function SettingsPage() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
-    }
-  };
-
-  const toggleItem = async (item: CatalogItem) => {
-    setToggling(item.id);
-    try {
-      const res = await api.patch(`/api/v1/business/catalog/${item.id}/toggle`);
-      setCatalog((prev) =>
-        prev.map((c) => c.id === item.id ? { ...c, is_available: res.data.is_available } : c)
-      );
-    } catch {
-      toast.error("Error actualizando producto");
-    } finally {
-      setToggling(null);
     }
   };
 
@@ -236,34 +229,6 @@ export default function SettingsPage() {
       setRemovingPhone(null);
     }
   };
-
-  const bulkToggle = async (is_available: boolean) => {
-    const ids = filtered.map((i) => i.id);
-    if (!ids.length) return;
-    try {
-      await api.post("/api/v1/business/catalog/bulk-toggle", { ids, is_available });
-      setCatalog((prev) =>
-        prev.map((c) => ids.includes(c.id) ? { ...c, is_available } : c)
-      );
-      toast.success(is_available ? `${ids.length} activados` : `${ids.length} ocultos`);
-    } catch {
-      toast.error("Error en acción masiva");
-    }
-  };
-
-  const filtered = catalog.filter((item) => {
-    const matchSearch = !search ||
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.category?.toLowerCase().includes(search.toLowerCase());
-    const matchFilter =
-      filterAvailable === "all" ||
-      (filterAvailable === "active" && item.is_available) ||
-      (filterAvailable === "hidden" && !item.is_available);
-    return matchSearch && matchFilter;
-  });
-
-  const activeCount = catalog.filter((c) => c.is_available).length;
-  const hiddenCount = catalog.filter((c) => !c.is_available).length;
 
   if (!profile) return (
     <div className="animate-pulse space-y-4 max-w-2xl">
@@ -431,85 +396,6 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
-
-      {/* ── Productos ───────────────────────────────────── */}
-      {catalog.length > 0 && (
-        <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
-            <h2 className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Productos — visibles para la IA</h2>
-            <div className="flex items-center gap-2.5 text-xs">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">{activeCount} activos</span>
-              {hiddenCount > 0 && <span className="text-slate-400 dark:text-slate-500 font-medium">{hiddenCount} ocultos</span>}
-            </div>
-          </div>
-          <div className="p-5 space-y-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar producto..."
-                  className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 transition-shadow placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                />
-              </div>
-              <select
-                value={filterAvailable}
-                onChange={(e) => setFilterAvailable(e.target.value as any)}
-                className="border border-slate-200 dark:border-slate-600 rounded-xl text-xs px-2.5 py-2 focus:outline-none bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer"
-              >
-                <option value="all">Todos ({catalog.length})</option>
-                <option value="active">Activos ({activeCount})</option>
-                <option value="hidden">Ocultos ({hiddenCount})</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-slate-400 dark:text-slate-500 font-medium">{filtered.length} visibles</span>
-              <button onClick={() => bulkToggle(true)} className="text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer font-semibold">Activar todos</button>
-              <span className="text-slate-200 dark:text-slate-700">|</span>
-              <button onClick={() => bulkToggle(false)} className="text-red-500 dark:text-red-400 hover:underline cursor-pointer font-semibold">Ocultar todos</button>
-            </div>
-            <div className="divide-y divide-slate-50 dark:divide-slate-700/50 max-h-80 overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-700">
-              {filtered.map((item) => {
-                const srcInfo = SOURCE_INFO[item.source || "csv"];
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex items-center justify-between px-4 py-2.5 ${!item.is_available ? "opacity-50 bg-white dark:bg-slate-800/60" : "hover:bg-slate-50/50 dark:hover:bg-slate-700/30"} transition-colors`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold flex-shrink-0 ${srcInfo?.badge || "bg-slate-100 text-slate-500"}`}>
-                        {(item.source || "csv").toUpperCase().slice(0, 2)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{item.name}</p>
-                        {item.category && <p className="text-xs text-slate-400 dark:text-slate-500">{item.category}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {item.price != null && (
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">${item.price.toLocaleString("es-CL")}</span>
-                      )}
-                      <button
-                        onClick={() => toggleItem(item)}
-                        disabled={toggling === item.id}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          item.is_available
-                            ? "text-emerald-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400"
-                            : "text-slate-300 dark:text-slate-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-500 dark:hover:text-emerald-400"
-                        }`}
-                      >
-                        {item.is_available ? <CheckCircle2 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Los cambios aplican de inmediato a la IA.</p>
-          </div>
-        </section>
-      )}
 
       {/* ── WhatsApp ────────────────────────────────────── */}
       <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -699,6 +585,51 @@ export default function SettingsPage() {
               className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 cursor-pointer transition-colors shadow-sm"
             >
               {changingSource ? "Cambiando..." : "Sí, cambiar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal confirmación eliminar fuente */}
+      {confirmDeleteSource && (
+        <Modal size="sm">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 bg-red-100 dark:bg-red-900/50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-900 dark:text-slate-100">
+                Eliminar productos de {SOURCE_INFO[confirmDeleteSource]?.label}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Esta acción no se puede deshacer</p>
+            </div>
+          </div>
+          <p className="text-sm text-slate-700 dark:text-slate-300 mb-5">
+            ¿Eliminar los{" "}
+            <strong>{catalogSource?.counts[confirmDeleteSource] || 0} productos</strong> de{" "}
+            <strong>{SOURCE_INFO[confirmDeleteSource]?.label}</strong>? Esta acción no se puede deshacer.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirmDeleteSource(null)}
+              disabled={deletingSource}
+              className="flex-1 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer font-medium transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={deleteSource}
+              disabled={deletingSource}
+              className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 cursor-pointer transition-colors shadow-sm flex items-center justify-center gap-2"
+            >
+              {deletingSource ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                "Sí, eliminar"
+              )}
             </button>
           </div>
         </Modal>

@@ -214,6 +214,18 @@ export const billingApi = {
 
 // ─── Business ─────────────────────────────────────────────────────────────────
 
+export interface CatalogItem {
+  id: string;
+  name: string;
+  description?: string;
+  price?: number;
+  category?: string;
+  is_available: boolean;
+  source?: string;
+  image_url?: string;
+  stock_quantity?: number;
+}
+
 export const businessApi = {
   uploadCatalog: (file: File) => {
     const form = new FormData();
@@ -222,9 +234,11 @@ export const businessApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
-  getCatalog:          () => api.get("/api/v1/business/catalog"),
+  getCatalog:          () => api.get<CatalogItem[]>("/api/v1/business/catalog"),
   toggleCatalogItem:   (itemId: string, isAvailable: boolean) =>
     api.patch(`/api/v1/business/catalog/${itemId}/toggle`, { is_available: isAvailable }),
+  deleteCatalogSource: (sourceName: string) =>
+    api.delete<{ deleted: number; source: string }>(`/api/v1/business/catalog/source/${sourceName}`),
   updateProfile: (data: object) => api.put("/api/v1/business/profile", data),
   usage:         (signal?: AbortSignal) => api.get<UsageData>("/api/v1/business/usage", { signal }),
 };

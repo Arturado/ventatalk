@@ -68,6 +68,8 @@ class CatalogItemOut(BaseModel):
     category: Optional[str]
     is_available: bool
     source: Optional[str]
+    image_url: Optional[str] = None
+    stock_quantity: Optional[int] = None
 
 
 # ── Selector de fuente ────────────────────────────────────────────────
@@ -155,6 +157,44 @@ async def set_catalog_source(
         "deleted_products": deleted_count,
         "message": f"Fuente cambiada a {new_source}. {deleted_count} productos de '{current_source}' eliminados.",
     }
+
+
+@router.delete("/catalog/source/{source_name}", status_code=200)
+async def delete_catalog_source(
+    source_name: str,
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """Elimina todos los productos de una fuente y limpia su configuración en integrations."""
+    if source_name not in VALID_SOURCES:
+        raise HTTPException(400, f"Fuente inválida. Opciones: {', '.join(VALID_SOURCES)}")
+
+    result = await db.execute(
+        delete(CatalogItem).where(
+            CatalogItem.business_id == business.id,
+            CatalogItem.source == source_name,
+        )
+    )
+    deleted = result.rowcount
+
+    integrations = dict(business.integrations or {})
+    changed = False
+    if source_name in integrations:
+        del integrations[source_name]
+        changed = True
+    if integrations.get("active_catalog_source") == source_name:
+        del integrations["active_catalog_source"]
+        changed = True
+
+    if changed:
+        business.integrations = integrations
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(business, "integrations")
+
+    await db.commit()
+
+    logger.info(f"Business {business.id}: {deleted} productos de '{source_name}' eliminados")
+    return {"deleted": deleted, "source": source_name}
 
 
 @router.post("/catalog", status_code=201)
@@ -281,6 +321,8 @@ async def get_catalog(
             category=item.category,
             is_available=item.is_available,
             source=item.source,
+            image_url=(item.metadata_ or {}).get("image_url"),
+            stock_quantity=(item.metadata_ or {}).get("stock"),
         )
         for item in items
     ]
