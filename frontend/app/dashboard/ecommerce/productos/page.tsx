@@ -5,11 +5,14 @@ import toast from "react-hot-toast";
 import { businessApi, type CatalogItem } from "@/lib/api";
 import { Package } from "lucide-react";
 
+const PAGE_SIZE = 20;
+
 export default function ProductosPage() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [imgErrors, setImgErrors] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     businessApi
@@ -43,6 +46,9 @@ export default function ProductosPage() {
       });
     }
   }
+
+  const totalPages = Math.ceil(items.length / PAGE_SIZE);
+  const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -96,7 +102,7 @@ export default function ProductosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
-                {items.map((item) => (
+                {pageItems.map((item) => (
                   <tr
                     key={item.id}
                     className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
@@ -203,6 +209,27 @@ export default function ProductosPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-slate-700/60">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="text-sm font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+              >
+                ← Anterior
+              </button>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="text-sm font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
