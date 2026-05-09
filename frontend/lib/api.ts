@@ -243,6 +243,27 @@ export interface OrdersResponse {
   pages: number;
 }
 
+export interface Coupon {
+  id: string;
+  code: string;
+  discount_type: string;
+  discount_value: number;
+  description?: string;
+  min_order_amount?: number;
+  usage_count: number;
+  usage_limit?: number;
+  expires_at?: string;
+  is_active: boolean;
+  source: string;
+}
+
+export interface CouponsResponse {
+  coupons: Coupon[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
 export interface CatalogItem {
   id: string;
   name: string;
@@ -273,6 +294,8 @@ export const businessApi = {
   usage:         (signal?: AbortSignal) => api.get<UsageData>("/api/v1/business/usage", { signal }),
   getOrders: (params?: { page?: number; limit?: number; search?: string; status?: string; payment_method?: string }) =>
     api.get<OrdersResponse>("/api/v1/business/orders", { params }),
+  getCoupons: (params?: { page?: number; limit?: number; search?: string; is_active?: string }) =>
+    api.get<CouponsResponse>("/api/v1/business/coupons", { params }),
 };
 
 export default api;

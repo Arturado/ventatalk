@@ -23,7 +23,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import get_db
 from app.core.encryption import decrypt_token, encrypt_token, mask_token
 from app.core.security import get_current_business
-from app.models.models import Business, CatalogItem, Order
+from app.models.models import Business, CatalogItem, Coupon, Order
 from app.services.integrations.jumpseller import JumpsellerService
 from app.services.integrations.bsale import BsaleService
 from app.services.integrations.shopify import ShopifyService
@@ -127,6 +127,24 @@ class WooCommerceOrderItem(BaseModel):
 
 class WooCommerceOrderIngestRequest(BaseModel):
     orders: List[WooCommerceOrderItem]
+    store_url: Optional[str] = None
+
+
+class WooCommerceCouponItem(BaseModel):
+    external_id: str
+    code: str
+    discount_type: str
+    discount_value: float
+    description: Optional[str] = None
+    min_order_amount: Optional[float] = None
+    usage_count: int = 0
+    usage_limit: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+
+class WooCommerceCouponIngestRequest(BaseModel):
+    coupons: List[WooCommerceCouponItem]
     store_url: Optional[str] = None
 
 
@@ -775,6 +793,74 @@ async def woocommerce_orders_ingest(
 
     logger.info(f"WooCommerce orders ingest OK {business.id}: +{created} nuevas, {updated} actualizadas")
     return {"created": created, "updated": updated, "total": len(body.orders)}
+
+
+@router.post("/woocommerce/coupons/ingest", status_code=200)
+async def woocommerce_coupons_ingest(
+    body: WooCommerceCouponIngestRequest,
+    x_ventatalk_token: str = Header(..., alias="X-VentaTalk-Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Endpoint público — autenticado solo con X-VentaTalk-Token.
+    El plugin de WP/WooCommerce llama aquí para sincronizar cupones.
+    Hace upsert por (business_id, source="woocommerce", code).
+    """
+    token_hash = _hash_token(x_ventatalk_token)
+    result = await db.execute(
+        select(Business).where(
+            text("integrations->'woocommerce'->>'token_hash' = :hash")
+        ).params(hash=token_hash)
+    )
+    business = result.scalar_one_or_none()
+
+    if not business:
+        raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
+
+    created = updated = 0
+
+    for coupon_data in body.coupons:
+        existing_result = await db.execute(
+            select(Coupon).where(
+                Coupon.business_id == business.id,
+                Coupon.source == "woocommerce",
+                Coupon.code == coupon_data.code,
+            )
+        )
+        coupon = existing_result.scalar_one_or_none()
+
+        if coupon:
+            coupon.external_id      = coupon_data.external_id
+            coupon.discount_type    = coupon_data.discount_type
+            coupon.discount_value   = coupon_data.discount_value
+            coupon.description      = coupon_data.description
+            coupon.min_order_amount = coupon_data.min_order_amount
+            coupon.usage_count      = coupon_data.usage_count
+            coupon.usage_limit      = coupon_data.usage_limit
+            coupon.expires_at       = coupon_data.expires_at
+            coupon.is_active        = coupon_data.is_active
+            updated += 1
+        else:
+            db.add(Coupon(
+                business_id     = business.id,
+                source          = "woocommerce",
+                external_id     = coupon_data.external_id,
+                code            = coupon_data.code,
+                discount_type   = coupon_data.discount_type,
+                discount_value  = coupon_data.discount_value,
+                description     = coupon_data.description,
+                min_order_amount = coupon_data.min_order_amount,
+                usage_count     = coupon_data.usage_count,
+                usage_limit     = coupon_data.usage_limit,
+                expires_at      = coupon_data.expires_at,
+                is_active       = coupon_data.is_active,
+            ))
+            created += 1
+
+    await db.commit()
+
+    logger.info(f"WooCommerce coupons ingest OK {business.id}: +{created} nuevos, {updated} actualizados")
+    return {"created": created, "updated": updated, "total": len(body.coupons)}
 
 
 @router.delete("/woocommerce/token", status_code=204)

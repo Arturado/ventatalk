@@ -19,7 +19,7 @@ from app.core.security import get_current_business
 from app.core.plan_limits import (
     conversations_this_month, catalog_items_count, days_until_reset,
 )
-from app.models.models import Business, CatalogItem, Order, PhoneNumber
+from app.models.models import Business, CatalogItem, Coupon, Order, PhoneNumber
 from app.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
@@ -519,6 +519,78 @@ async def get_orders(
                 source=o.source,
             )
             for o in orders
+        ],
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit) if total > 0 else 1,
+    }
+
+
+class CouponOut(BaseModel):
+    id: str
+    code: str
+    discount_type: str
+    discount_value: float
+    description: Optional[str] = None
+    min_order_amount: Optional[float] = None
+    usage_count: int
+    usage_limit: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    is_active: bool
+    source: str
+
+
+@router.get("/coupons")
+async def get_coupons(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: str = Query(""),
+    is_active: Optional[str] = Query(None),
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    conditions = [Coupon.business_id == business.id]
+
+    if search:
+        conditions.append(
+            or_(
+                Coupon.code.ilike(f"%{search}%"),
+                Coupon.description.ilike(f"%{search}%"),
+            )
+        )
+    if is_active is not None and is_active != "":
+        conditions.append(Coupon.is_active == (is_active.lower() == "true"))
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Coupon).where(*conditions)
+    )
+    total = count_result.scalar() or 0
+
+    result = await db.execute(
+        select(Coupon)
+        .where(*conditions)
+        .order_by(Coupon.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    coupons = result.scalars().all()
+
+    return {
+        "coupons": [
+            CouponOut(
+                id=str(c.id),
+                code=c.code,
+                discount_type=c.discount_type,
+                discount_value=c.discount_value,
+                description=c.description,
+                min_order_amount=c.min_order_amount,
+                usage_count=c.usage_count,
+                usage_limit=c.usage_limit,
+                expires_at=c.expires_at,
+                is_active=c.is_active,
+                source=c.source,
+            )
+            for c in coupons
         ],
         "total": total,
         "page": page,

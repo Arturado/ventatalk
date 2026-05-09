@@ -424,6 +424,54 @@ function ventatalk_push_single_order( $order_id ) {
     ] );
 }
 
+// ── Helper: construir payload de un cupón ─────────────────────────────────────
+
+function ventatalk_build_coupon_payload( $coupon_id ) {
+    $coupon = new WC_Coupon( $coupon_id );
+
+    $date_expires = $coupon->get_date_expires();
+    $expires_at   = $date_expires ? $date_expires->format( 'c' ) : null;
+
+    $minimum = $coupon->get_minimum_amount();
+
+    return [
+        'external_id'      => (string) $coupon_id,
+        'code'             => $coupon->get_code(),
+        'discount_type'    => $coupon->get_discount_type(),
+        'discount_value'   => (float) $coupon->get_amount(),
+        'description'      => $coupon->get_description() ?: null,
+        'min_order_amount' => ( $minimum !== '' && $minimum !== null ) ? (float) $minimum : null,
+        'usage_count'      => (int) $coupon->get_usage_count(),
+        'usage_limit'      => $coupon->get_usage_limit() ? (int) $coupon->get_usage_limit() : null,
+        'expires_at'       => $expires_at,
+        'is_active'        => get_post_status( $coupon_id ) === 'publish',
+    ];
+}
+
+// ── WooCommerce: sincronización de un cupón individual ───────────────────────
+
+function ventatalk_push_single_coupon( $coupon_id ) {
+    $opts      = ventatalk_get_options();
+    $api_token = $opts['api_token'] ?? '';
+    if ( empty( $api_token ) ) return;
+
+    if ( ! class_exists( 'WooCommerce' ) ) return;
+
+    $api_url = rtrim( $opts['api_url'] ?? 'https://api.ventatalk.com', '/' );
+
+    wp_remote_post( $api_url . '/api/v1/integrations/woocommerce/coupons/ingest', [
+        'timeout' => 5,
+        'headers' => [
+            'Content-Type'      => 'application/json',
+            'X-VentaTalk-Token' => $api_token,
+        ],
+        'body' => wp_json_encode( [
+            'coupons'   => [ ventatalk_build_coupon_payload( $coupon_id ) ],
+            'store_url' => get_site_url(),
+        ] ),
+    ] );
+}
+
 // ── Hooks WooCommerce para sincronización en tiempo real ──────────────────────
 
 // Producto guardado/actualizado en el admin o vía API
@@ -463,6 +511,14 @@ add_action( 'woocommerce_order_status_changed', 'ventatalk_woo_on_order_status_c
 
 function ventatalk_woo_on_order_status_changed( $order_id ) {
     ventatalk_push_single_order( $order_id );
+}
+
+// ── Hooks WooCommerce para sincronización de cupones en tiempo real ───────────
+
+add_action( 'woocommerce_coupon_options_save', 'ventatalk_woo_on_coupon_save', 20, 1 );
+
+function ventatalk_woo_on_coupon_save( $coupon_id ) {
+    ventatalk_push_single_coupon( $coupon_id );
 }
 
 // ── AJAX: sincronizar catálogo WooCommerce → VentaTalk ────────────────────────
@@ -567,12 +623,43 @@ function ventatalk_ajax_sync_catalog() {
         }
     }
 
+    // ── Sincronizar cupones ──
+    $coupons_synced = 0;
+    $all_coupons    = get_posts( [ 'post_type' => 'shop_coupon', 'numberposts' => -1, 'post_status' => 'publish' ] );
+
+    if ( ! empty( $all_coupons ) ) {
+        $coupon_payloads = [];
+        foreach ( $all_coupons as $coupon_post ) {
+            $coupon_payloads[] = ventatalk_build_coupon_payload( $coupon_post->ID );
+        }
+
+        foreach ( array_chunk( $coupon_payloads, 50 ) as $batch ) {
+            $coupon_resp = wp_remote_post( $api_url . '/api/v1/integrations/woocommerce/coupons/ingest', [
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type'      => 'application/json',
+                    'X-VentaTalk-Token' => $api_token,
+                ],
+                'body' => wp_json_encode( [
+                    'coupons'   => $batch,
+                    'store_url' => get_site_url(),
+                ] ),
+            ] );
+
+            if ( ! is_wp_error( $coupon_resp ) && wp_remote_retrieve_response_code( $coupon_resp ) === 200 ) {
+                $coupon_body     = json_decode( wp_remote_retrieve_body( $coupon_resp ), true );
+                $coupons_synced += intval( $coupon_body['total'] ?? 0 );
+            }
+        }
+    }
+
     wp_send_json_success( [
         'message' => sprintf(
-            'Sincronización exitosa: %d productos nuevos, %d actualizados y %d órdenes sincronizadas.',
+            'Sincronización exitosa: %d productos nuevos, %d actualizados, %d órdenes y %d cupones sincronizados.',
             $products_created,
             $products_updated,
-            $orders_synced
+            $orders_synced,
+            $coupons_synced
         ),
         'total' => intval( $body['total'] ?? 0 ),
     ] );
