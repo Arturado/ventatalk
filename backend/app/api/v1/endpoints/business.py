@@ -5,11 +5,13 @@ Catálogo de productos: upload CSV → genera embeddings → guarda en pgvector.
 import csv
 import io
 import logging
+import math
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, select, delete
+from sqlalchemy import func, or_, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -17,7 +19,7 @@ from app.core.security import get_current_business
 from app.core.plan_limits import (
     conversations_this_month, catalog_items_count, days_until_reset,
 )
-from app.models.models import Business, CatalogItem, PhoneNumber
+from app.models.models import Business, CatalogItem, Order, PhoneNumber
 from app.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
@@ -444,6 +446,84 @@ async def _reindex_items(item_ids: list[str]):
             logger.info(f"Reindex OK: {len(items)} productos actualizados")
         except Exception as e:
             logger.error(f"Error en reindex: {e}", exc_info=True)
+
+
+class OrderOut(BaseModel):
+    id: str
+    order_number: str
+    status: str
+    total: Optional[float] = None
+    currency: str
+    payment_method: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    items: Optional[list] = None
+    ordered_at: Optional[datetime] = None
+    source: str
+
+
+@router.get("/orders")
+async def get_orders(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: str = Query(""),
+    status: str = Query(""),
+    payment_method: str = Query(""),
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    conditions = [Order.business_id == business.id]
+
+    if search:
+        conditions.append(
+            or_(
+                Order.order_number.ilike(f"%{search}%"),
+                Order.customer_name.ilike(f"%{search}%"),
+                Order.customer_email.ilike(f"%{search}%"),
+            )
+        )
+    if status:
+        conditions.append(Order.status == status)
+    if payment_method:
+        conditions.append(Order.payment_method.ilike(f"%{payment_method}%"))
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Order).where(*conditions)
+    )
+    total = count_result.scalar() or 0
+
+    result = await db.execute(
+        select(Order)
+        .where(*conditions)
+        .order_by(func.coalesce(Order.ordered_at, Order.created_at).desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    orders = result.scalars().all()
+
+    return {
+        "orders": [
+            OrderOut(
+                id=str(o.id),
+                order_number=o.order_number,
+                status=o.status,
+                total=o.total,
+                currency=o.currency,
+                payment_method=o.payment_method,
+                customer_name=o.customer_name,
+                customer_email=o.customer_email,
+                customer_phone=o.customer_phone,
+                items=o.items if isinstance(o.items, list) else [],
+                ordered_at=o.ordered_at,
+                source=o.source,
+            )
+            for o in orders
+        ],
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit) if total > 0 else 1,
+    }
 
 
 @router.put("/profile")

@@ -214,6 +214,35 @@ export const billingApi = {
 
 // ─── Business ─────────────────────────────────────────────────────────────────
 
+export interface OrderItem {
+  name?: string;
+  qty?: number;
+  price?: number;
+  sku?: string;
+}
+
+export interface Order {
+  id: string;
+  order_number: string;
+  status: string;
+  total?: number;
+  currency: string;
+  payment_method?: string;
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  items?: OrderItem[];
+  ordered_at?: string;
+  source: string;
+}
+
+export interface OrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
 export interface CatalogItem {
   id: string;
   name: string;
@@ -242,6 +271,8 @@ export const businessApi = {
     api.delete<{ deleted: number; source: string }>(`/api/v1/business/catalog/source/${sourceName}`),
   updateProfile: (data: object) => api.put("/api/v1/business/profile", data),
   usage:         (signal?: AbortSignal) => api.get<UsageData>("/api/v1/business/usage", { signal }),
+  getOrders: (params?: { page?: number; limit?: number; search?: string; status?: string; payment_method?: string }) =>
+    api.get<OrdersResponse>("/api/v1/business/orders", { params }),
 };
 
 export default api;
