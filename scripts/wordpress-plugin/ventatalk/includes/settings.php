@@ -334,6 +334,42 @@ function ventatalk_build_product_payload( WC_Product $product ) {
     ];
 }
 
+// ── Helper: construir payload de una orden ────────────────────────────────────
+
+function ventatalk_build_order_payload( $order_id ) {
+    $order = wc_get_order( $order_id );
+    if ( ! $order ) return null;
+
+    $items = [];
+    foreach ( $order->get_items() as $item ) {
+        $product = $item->get_product();
+        $items[] = [
+            'name'  => $item->get_name(),
+            'qty'   => $item->get_quantity(),
+            'price' => (float) $item->get_total(),
+            'sku'   => $product ? $product->get_sku() : '',
+        ];
+    }
+
+    $customer_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ) ?: null;
+    $date_created  = $order->get_date_created();
+
+    return [
+        'external_id'    => (string) $order->get_id(),
+        'order_number'   => $order->get_order_number(),
+        'status'         => $order->get_status(),
+        'total'          => (float) $order->get_total(),
+        'currency'       => $order->get_currency(),
+        'payment_method' => $order->get_payment_method_title() ?: null,
+        'customer_name'  => $customer_name,
+        'customer_email' => $order->get_billing_email() ?: null,
+        'customer_phone' => $order->get_billing_phone() ?: null,
+        'items'          => $items,
+        'notes'          => $order->get_customer_note() ?: null,
+        'ordered_at'     => $date_created ? $date_created->format( 'c' ) : null,
+    ];
+}
+
 // ── WooCommerce: sincronización de un producto individual ─────────────────────
 
 function ventatalk_push_single_product( $product_id ) {
@@ -356,6 +392,33 @@ function ventatalk_push_single_product( $product_id ) {
         ],
         'body' => wp_json_encode( [
             'products'  => [ ventatalk_build_product_payload( $product ) ],
+            'store_url' => get_site_url(),
+        ] ),
+    ] );
+}
+
+// ── WooCommerce: sincronización de una orden individual ──────────────────────
+
+function ventatalk_push_single_order( $order_id ) {
+    $opts      = ventatalk_get_options();
+    $api_token = $opts['api_token'] ?? '';
+    if ( empty( $api_token ) ) return;
+
+    if ( ! class_exists( 'WooCommerce' ) ) return;
+
+    $payload = ventatalk_build_order_payload( $order_id );
+    if ( ! $payload ) return;
+
+    $api_url = rtrim( $opts['api_url'] ?? 'https://api.ventatalk.com', '/' );
+
+    wp_remote_post( $api_url . '/api/v1/integrations/woocommerce/orders/ingest', [
+        'timeout' => 5,
+        'headers' => [
+            'Content-Type'      => 'application/json',
+            'X-VentaTalk-Token' => $api_token,
+        ],
+        'body' => wp_json_encode( [
+            'orders'    => [ $payload ],
             'store_url' => get_site_url(),
         ] ),
     ] );
@@ -386,6 +449,20 @@ function ventatalk_woo_on_set_price( $product ) {
     if ( $product instanceof WC_Product ) {
         ventatalk_push_single_product( $product->get_id() );
     }
+}
+
+// ── Hooks WooCommerce para sincronización de órdenes en tiempo real ───────────
+
+add_action( 'woocommerce_new_order', 'ventatalk_woo_on_new_order', 20, 1 );
+
+function ventatalk_woo_on_new_order( $order_id ) {
+    ventatalk_push_single_order( $order_id );
+}
+
+add_action( 'woocommerce_order_status_changed', 'ventatalk_woo_on_order_status_changed', 20, 1 );
+
+function ventatalk_woo_on_order_status_changed( $order_id ) {
+    ventatalk_push_single_order( $order_id );
 }
 
 // ── AJAX: sincronizar catálogo WooCommerce → VentaTalk ────────────────────────
@@ -454,11 +531,48 @@ function ventatalk_ajax_sync_catalog() {
         wp_send_json_error( [ 'message' => 'Error del servidor VentaTalk (HTTP ' . $code . ').' ] );
     }
 
+    $products_created = intval( $body['created'] ?? 0 );
+    $products_updated = intval( $body['updated'] ?? 0 );
+
+    // ── Sincronizar órdenes ──
+    $orders_synced = 0;
+    $all_orders    = wc_get_orders( [ 'limit' => -1, 'status' => 'any' ] );
+
+    if ( ! empty( $all_orders ) ) {
+        $order_payloads = [];
+        foreach ( $all_orders as $order ) {
+            $p = ventatalk_build_order_payload( $order->get_id() );
+            if ( $p ) {
+                $order_payloads[] = $p;
+            }
+        }
+
+        foreach ( array_chunk( $order_payloads, 50 ) as $batch ) {
+            $order_resp = wp_remote_post( $api_url . '/api/v1/integrations/woocommerce/orders/ingest', [
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type'      => 'application/json',
+                    'X-VentaTalk-Token' => $api_token,
+                ],
+                'body' => wp_json_encode( [
+                    'orders'    => $batch,
+                    'store_url' => get_site_url(),
+                ] ),
+            ] );
+
+            if ( ! is_wp_error( $order_resp ) && wp_remote_retrieve_response_code( $order_resp ) === 200 ) {
+                $order_body     = json_decode( wp_remote_retrieve_body( $order_resp ), true );
+                $orders_synced += intval( $order_body['total'] ?? 0 );
+            }
+        }
+    }
+
     wp_send_json_success( [
         'message' => sprintf(
-            'Sincronización exitosa: %d productos nuevos, %d actualizados.',
-            intval( $body['created'] ?? 0 ),
-            intval( $body['updated'] ?? 0 )
+            'Sincronización exitosa: %d productos nuevos, %d actualizados y %d órdenes sincronizadas.',
+            $products_created,
+            $products_updated,
+            $orders_synced
         ),
         'total' => intval( $body['total'] ?? 0 ),
     ] );

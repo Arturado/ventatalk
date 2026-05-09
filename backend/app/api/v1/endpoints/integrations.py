@@ -23,7 +23,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.database import get_db
 from app.core.encryption import decrypt_token, encrypt_token, mask_token
 from app.core.security import get_current_business
-from app.models.models import Business, CatalogItem
+from app.models.models import Business, CatalogItem, Order
 from app.services.integrations.jumpseller import JumpsellerService
 from app.services.integrations.bsale import BsaleService
 from app.services.integrations.shopify import ShopifyService
@@ -107,6 +107,26 @@ class WooCommerceProduct(BaseModel):
 
 class WooCommerceIngestRequest(BaseModel):
     products: List[WooCommerceProduct]
+    store_url: Optional[str] = None
+
+
+class WooCommerceOrderItem(BaseModel):
+    external_id: str
+    order_number: str
+    status: str
+    total: float
+    currency: str = "CLP"
+    payment_method: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    items: list = []
+    notes: Optional[str] = None
+    ordered_at: Optional[datetime] = None
+
+
+class WooCommerceOrderIngestRequest(BaseModel):
+    orders: List[WooCommerceOrderItem]
     store_url: Optional[str] = None
 
 
@@ -680,6 +700,81 @@ async def woocommerce_ingest(
 
     logger.info(f"WooCommerce ingest OK {business_id}: +{created} nuevos, {updated} actualizados")
     return {"created": created, "updated": updated, "total": len(body.products)}
+
+
+@router.post("/woocommerce/orders/ingest", status_code=200)
+async def woocommerce_orders_ingest(
+    body: WooCommerceOrderIngestRequest,
+    x_ventatalk_token: str = Header(..., alias="X-VentaTalk-Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Endpoint público — autenticado solo con X-VentaTalk-Token.
+    El plugin de WP/WooCommerce llama aquí para sincronizar órdenes.
+    Hace upsert por (business_id, source="woocommerce", external_id).
+    """
+    token_hash = _hash_token(x_ventatalk_token)
+    result = await db.execute(
+        select(Business).where(
+            text("integrations->'woocommerce'->>'token_hash' = :hash")
+        ).params(hash=token_hash)
+    )
+    business = result.scalar_one_or_none()
+
+    if not business:
+        raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
+
+    now = datetime.now(timezone.utc)
+    created = updated = 0
+
+    for order_data in body.orders:
+        existing_result = await db.execute(
+            select(Order).where(
+                Order.business_id == business.id,
+                Order.source == "woocommerce",
+                Order.external_id == order_data.external_id,
+            )
+        )
+        order = existing_result.scalar_one_or_none()
+
+        if order:
+            order.order_number   = order_data.order_number
+            order.status         = order_data.status
+            order.total          = order_data.total
+            order.currency       = order_data.currency
+            order.payment_method = order_data.payment_method
+            order.customer_name  = order_data.customer_name
+            order.customer_email = order_data.customer_email
+            order.customer_phone = order_data.customer_phone
+            order.items          = order_data.items
+            order.notes          = order_data.notes
+            order.ordered_at     = order_data.ordered_at
+            order.synced_at      = now
+            updated += 1
+        else:
+            db.add(Order(
+                business_id    = business.id,
+                source         = "woocommerce",
+                external_id    = order_data.external_id,
+                order_number   = order_data.order_number,
+                status         = order_data.status,
+                total          = order_data.total,
+                currency       = order_data.currency,
+                payment_method = order_data.payment_method,
+                customer_name  = order_data.customer_name,
+                customer_email = order_data.customer_email,
+                customer_phone = order_data.customer_phone,
+                items          = order_data.items,
+                notes          = order_data.notes,
+                ordered_at     = order_data.ordered_at,
+                synced_at      = now,
+            ))
+            created += 1
+
+    await db.commit()
+
+    logger.info(f"WooCommerce orders ingest OK {business.id}: +{created} nuevas, {updated} actualizadas")
+    return {"created": created, "updated": updated, "total": len(body.orders)}
 
 
 @router.delete("/woocommerce/token", status_code=204)
