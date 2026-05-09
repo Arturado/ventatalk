@@ -79,6 +79,9 @@ export default function ProductosPage() {
                     Producto
                   </th>
                   <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-5 py-3">
+                    SKU
+                  </th>
+                  <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-5 py-3">
                     Stock
                   </th>
                   <th className="text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-5 py-3">
@@ -127,6 +130,11 @@ export default function ProductosPage() {
                           )}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">
+                        {item.sku || "—"}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5">
                       {item.stock_quantity == null ? (

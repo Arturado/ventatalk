@@ -224,6 +224,7 @@ export interface CatalogItem {
   source?: string;
   image_url?: string;
   stock_quantity?: number;
+  sku?: string;
 }
 
 export const businessApi = {

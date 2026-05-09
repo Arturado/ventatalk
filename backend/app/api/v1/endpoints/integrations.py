@@ -102,6 +102,7 @@ class WooCommerceProduct(BaseModel):
     image_url: Optional[str] = None
     is_available: bool = True
     stock_quantity: Optional[int] = None
+    sku: Optional[str] = None
 
 
 class WooCommerceIngestRequest(BaseModel):
@@ -640,8 +641,7 @@ async def woocommerce_ingest(
             item.price        = prod.price
             item.category     = prod.category
             item.is_available = prod.is_available
-            if prod.image_url:
-                item.metadata_ = {**(item.metadata_ or {}), "image_url": prod.image_url, "stock_quantity": prod.stock_quantity}
+            item.metadata_ = {**(item.metadata_ or {}), "image_url": prod.image_url, "stock_quantity": prod.stock_quantity, "sku": prod.sku}
             updated += 1
         else:
             db.add(CatalogItem(
@@ -653,7 +653,7 @@ async def woocommerce_ingest(
                 is_available = prod.is_available,
                 source       = "woocommerce",
                 external_id  = prod.external_id,
-                metadata_    = {"image_url": prod.image_url, "stock_quantity": prod.stock_quantity} if (prod.image_url or prod.stock_quantity is not None) else {},
+                metadata_    = {"image_url": prod.image_url, "stock_quantity": prod.stock_quantity, "sku": prod.sku} if (prod.image_url or prod.stock_quantity is not None or prod.sku) else {},
             ))
             created += 1
 

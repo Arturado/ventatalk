@@ -329,6 +329,7 @@ function ventatalk_build_product_payload( WC_Product $product ) {
         ] ) : [], 'name' ) ),
         'image_url'      => $image_url,
         'stock_quantity' => $stock_quantity,
+        'sku'            => $product->get_sku() !== '' ? $product->get_sku() : null,
         'is_available'   => $product->is_in_stock(),
     ];
 }
