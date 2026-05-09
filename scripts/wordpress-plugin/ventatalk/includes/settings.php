@@ -291,18 +291,45 @@ function ventatalk_sanitize_options( $input ) {
 
 function ventatalk_build_product_payload( WC_Product $product ) {
     $price = $product->get_price();
+
+    // Stock quantity: null when manage_stock is disabled.
+    if ( $product->is_type( 'variable' ) ) {
+        $total       = 0;
+        $any_managed = false;
+        foreach ( $product->get_children() as $child_id ) {
+            $variation = wc_get_product( $child_id );
+            if ( $variation && $variation->get_manage_stock() ) {
+                $any_managed = true;
+                $total      += (int) $variation->get_stock_quantity();
+            }
+        }
+        $stock_quantity = $any_managed ? $total : null;
+    } else {
+        $stock_quantity = $product->get_manage_stock() ? (int) $product->get_stock_quantity() : null;
+    }
+
+    // Image URL: main image → first gallery image → null.
+    $image_id = $product->get_image_id();
+    if ( $image_id ) {
+        $image_url = wp_get_attachment_url( $image_id ) ?: null;
+    } else {
+        $gallery   = $product->get_gallery_image_ids();
+        $image_url = ! empty( $gallery ) ? ( wp_get_attachment_url( $gallery[0] ) ?: null ) : null;
+    }
+
     return [
-        'external_id'  => (string) $product->get_id(),
-        'name'         => $product->get_name(),
-        'description'  => wp_strip_all_tags( $product->get_short_description() ?: $product->get_description() ),
-        'price'        => $price !== '' ? (float) $price : null,
-        'category'     => implode( ', ', wp_list_pluck( $product->get_category_ids() ? get_terms( [
+        'external_id'    => (string) $product->get_id(),
+        'name'           => $product->get_name(),
+        'description'    => wp_strip_all_tags( $product->get_short_description() ?: $product->get_description() ),
+        'price'          => $price !== '' ? (float) $price : null,
+        'category'       => implode( ', ', wp_list_pluck( $product->get_category_ids() ? get_terms( [
             'taxonomy' => 'product_cat',
             'include'  => $product->get_category_ids(),
             'fields'   => 'names',
         ] ) : [], 'name' ) ),
-        'image_url'    => wp_get_attachment_url( $product->get_image_id() ) ?: null,
-        'is_available' => $product->is_in_stock(),
+        'image_url'      => $image_url,
+        'stock_quantity' => $stock_quantity,
+        'is_available'   => $product->is_in_stock(),
     ];
 }
 
