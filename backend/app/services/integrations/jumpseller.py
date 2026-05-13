@@ -125,7 +125,41 @@ class JumpsellerService:
             logger.warning(f"Jumpseller: error obteniendo detalle producto {product_id}: {e}")
         return None
 
-    async def sync_catalog(self, db: AsyncSession, business_id: str) -> dict:
+    async def detect_url_prefix(self, shop_url: str, sample_permalink: str) -> str:
+        """
+        Detecta el prefix de URL que usa esta tienda Jumpseller probando con HEAD requests.
+        Retorna '/products/' o '/' según cuál responda 200. Fallback: '/products/'.
+
+        Solo se llama si no hay prefix cacheado. Una vez detectado, debe guardarse
+        en integrations.jumpseller.url_prefix para futuros syncs.
+        """
+        if not shop_url or not sample_permalink:
+            return "/products/"
+
+        shop_url = shop_url.rstrip("/")
+        candidates = ["/products/", "/"]
+
+        async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:
+            for prefix in candidates:
+                url = f"{shop_url}{prefix}{sample_permalink}"
+                try:
+                    resp = await client.head(url)
+                    if resp.status_code == 200:
+                        logger.info(f"Jumpseller: prefix detectado = '{prefix}' (URL: {url})")
+                        return prefix
+                except Exception as e:
+                    logger.debug(f"Jumpseller: error probando '{url}': {e}")
+                    continue
+
+        logger.warning(f"Jumpseller: no se detectó prefix para {shop_url}, usando default '/products/'")
+        return "/products/"
+
+    async def sync_catalog(
+        self,
+        db: AsyncSession,
+        business_id: str,
+        cached_url_prefix: str | None = None,
+    ) -> dict:
         """
         Sincroniza el catálogo completo de Jumpseller a la DB de VentaTalk.
         Retorna estadísticas del sync.
@@ -143,20 +177,37 @@ class JumpsellerService:
         if not shop_url:
             logger.warning("Jumpseller: shop_url no disponible, product_url quedará null")
 
-        # Normalizar productos resolviendo permalink individual
+        # Pre-fetch detalles de todos los productos para tener permalinks
+        product_details: dict[int | str, str] = {}
+        for p in raw_products:
+            raw = p.get("product", p)
+            product_id = raw.get("id")
+            if shop_url and product_id:
+                detail = await self.fetch_product_detail(product_id)
+                if detail and detail.get("permalink"):
+                    product_details[product_id] = detail["permalink"]
+
+        # Resolver prefix (cacheado o detectado)
+        url_prefix = cached_url_prefix
+        if url_prefix is None and shop_url and product_details:
+            first_permalink = next(iter(product_details.values()))
+            url_prefix = await self.detect_url_prefix(shop_url, first_permalink)
+        elif url_prefix is None:
+            url_prefix = "/products/"
+
+        # Normalizar con product_url completo
         normalized = []
         for p in raw_products:
             raw = p.get("product", p)
             product_id = raw.get("id")
-            permalink = None
-            if shop_url and product_id:
-                detail = await self.fetch_product_detail(product_id)
-                if detail:
-                    permalink = detail.get("permalink")
-            product_url = f"{shop_url}/products/{permalink}" if shop_url and permalink else None
+            permalink = product_details.get(product_id)
+            product_url = f"{shop_url}{url_prefix}{permalink}" if shop_url and permalink else None
             n = self._normalize_product(p, product_url=product_url)
             if n:
                 normalized.append(n)
+
+        # Exponer el prefix detectado para que el caller lo guarde
+        stats["_url_prefix"] = url_prefix
 
         # 3. IDs actuales en Jumpseller
         jumpseller_ids = {p["external_id"] for p in normalized}

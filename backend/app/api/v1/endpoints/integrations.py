@@ -899,7 +899,16 @@ async def _run_jumpseller_sync(business_id: str, login: str, auth_token_encrypte
             await db.commit()
 
             js = JumpsellerService(login=login, auth_token=auth_token)
-            stats = await js.sync_catalog(db, business_id)
+
+            pre_result = await db.execute(select(Business).where(Business.id == business_id))
+            pre_business = pre_result.scalar_one_or_none()
+            cached_prefix = (
+                (pre_business.integrations or {}).get("jumpseller", {}).get("url_prefix")
+                if pre_business else None
+            )
+
+            stats = await js.sync_catalog(db, business_id, cached_url_prefix=cached_prefix)
+            detected_prefix = stats.pop("_url_prefix", None)
 
             store_info = await js.fetch_store_info()
 
@@ -910,6 +919,8 @@ async def _run_jumpseller_sync(business_id: str, login: str, auth_token_encrypte
                 business.integrations["jumpseller"]["products_synced"] = stats["created"] + stats["updated"]
                 if store_info and store_info.get("url"):
                     business.integrations["jumpseller"]["shop_url"] = store_info["url"].rstrip("/")
+                if detected_prefix and cached_prefix != detected_prefix:
+                    business.integrations["jumpseller"]["url_prefix"] = detected_prefix
                 business.integrations["active_catalog_source"] = "jumpseller"
                 flag_modified(business, "integrations")
                 await db.commit()
