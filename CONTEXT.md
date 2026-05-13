@@ -17,7 +17,7 @@ backend/app/api/v1/endpoints/
 
 frontend/app/dashboard/
   page.tsx                    ← overview
-  conversations/page.tsx      ← layout estilo WhatsApp Web
+  conversations/page.tsx      ← layout estilo WhatsApp Web + panel tracking links
   contacts/, leads/
   ecommerce/
     productos/page.tsx        ← tabla: thumbnail, SKU, stock, toggle is_available, paginación
@@ -37,19 +37,19 @@ scripts/wordpress-plugin/ventatalk/  ← v1.1.0
 
 ## Endpoints Backend — Referencia Completa
 
-### Business (/api/v1/business/)
+### Business (`/api/v1/business/`)
 ```
 GET    /catalog                      → CatalogItem[] con image_url, stock_quantity, sku
 DELETE /catalog/source/{name}        → elimina productos de esa fuente
 PATCH  /catalog/{id}/toggle          → activa/desactiva is_available
 GET/POST /catalog/source             → fuente activa del catálogo
-GET    /orders?page&limit&search&status&payment_method  → paginado
-GET    /coupons?page&limit&search&is_active             → paginado
+GET    /orders?page&limit&search&status&payment_method  → paginado { items, total, page, pages }
+GET    /coupons?page&limit&search&is_active             → paginado { items, total, page, pages }
 GET    /usage
 GET/PUT /profile
 ```
 
-### Integraciones (/api/v1/integrations/)
+### Integraciones (`/api/v1/integrations/`)
 ```
 WooCommerce:
   POST   /woocommerce/token
@@ -63,20 +63,24 @@ Jumpseller/Bsale/Shopify/MercadoLibre:
   POST /{provider}/connect, sync | GET /status | DELETE /disconnect
 ```
 
-### Admin (/api/v1/admin/) — requiere SUPERADMIN_EMAIL
+### Admin (`/api/v1/admin/`) — requiere SUPERADMIN_EMAIL
 ```
-GET  /stats/overview
-GET  /businesses?page&search&limit
-GET  /businesses/{id}
-PATCH /businesses/{id}/features
+GET   /stats/overview
+GET   /businesses?page&search&limit  → { items, total, page, limit }  (NO usa "data")
+GET   /businesses/{id}               → mismo shape que un item de la lista (sin enriquecimiento)
+PATCH /businesses/{id}/features      → recibe Record<string, boolean>
 PATCH /businesses/{id}/plan
 ```
 
-### Tracking (/api/v1/)
+### Tracking (`/api/v1/`)
 ```
-POST /conversations/{id}/tracking-link
-GET  /conversations/{id}/tracking-links
-GET  /track/{token}   ← público, redirige
+POST /conversations/{id}/tracking-link   → crea token, devuelve { token, tracking_url, destination_url, label, converted, created_at }
+GET  /conversations/{id}/tracking-links  → lista de TrackingLink[]
+GET  /track/{token}                      → público, redirige al destino y marca click
+
+# Formato actual de tracking_url: https://api.ventatalk.com/track/{token}
+# Formato planeado (Tracking 2.0, ver SPEC.md sección 13):
+#   {product_url}?vt_conv={token}  ← URL del cliente con UTM
 ```
 
 ## Modelos DB
@@ -87,6 +91,7 @@ is_available: bool      # False = bot NO lee el producto
 source: str             # csv|woocommerce|jumpseller|bsale|shopify|mercadolibre
 metadata: JSONB         # image_url, stock_quantity, sku (según fuente)
 embedding: Vector(1536)
+# product_url: VARCHAR(500) NULL  ← PLANEADO (Tracking 2.0 Fase 1, migración 008)
 ```
 
 ### Order
@@ -115,7 +120,7 @@ UniqueConstraint: (business_id, source, code)
 plan: PlanType          # starter|pro|max
 billing_cycle           # monthly|annual
 stripe_customer_id, stripe_subscription_id
-features: JSONB         # features activos + add-ons
+features: JSONB         # Record<string, boolean> — feature flags por tenant. null por defecto.
 conversations_this_month, conversations_reset_at
 integrations: JSONB     # config de cada integración (tokens encriptados)
 ```
@@ -126,12 +131,25 @@ channel: str            # whatsapp|instagram
 status: ConversationStatus
 ```
 
+### ConversionToken
+```python
+business_id, conversation_id
+token: str              # único, generado al crear link
+destination_url: str    # URL a la que apunta
+label: str | None       # etiqueta opcional (ej. "café etíope 250g")
+converted: bool
+converted_at: datetime | None
+click_count: int
+created_at: datetime
+```
+
 ## lib/api.ts — Interfaces Clave
 
 ```typescript
 interface CatalogItem {
   id, name, price?, is_available, source
   image_url?, stock_quantity?, sku?
+  // product_url?: string  ← PLANEADO (Tracking 2.0 Fase 1)
 }
 
 interface Order {
@@ -146,11 +164,36 @@ interface Coupon {
   expires_at?, is_active, source
 }
 
-businessApi.toggleCatalogItem(id, isAvailable)    // PATCH /business/catalog/{id}/toggle
-businessApi.deleteCatalogSource(name)              // DELETE /business/catalog/source/{name}
-businessApi.getCatalog()                           // GET /business/catalog
-businessApi.getOrders(params)                      // GET /business/orders
-businessApi.getCoupons(params)                     // GET /business/coupons
+interface TrackingLink {
+  token, tracking_url, destination_url
+  label: string | null
+  converted: boolean
+  converted_at: string | null
+  created_at: string
+}
+
+// Admin
+interface Business {
+  id, name, email, plan
+  billing_cycle?: string
+  is_active: boolean                        // booleano, NO "active" | "inactive"
+  features: Record<string, boolean> | null  // JSONB, NO array
+  integrations?: string[]                   // array de nombres, NO objetos
+  conversations_this_month?, max_conversations_per_month?, created_at?
+}
+
+interface BusinessListResponse {
+  items: Business[]    // NO "data"
+  total, page, limit
+}
+
+businessApi.toggleCatalogItem(id, isAvailable)
+businessApi.deleteCatalogSource(name)
+businessApi.getCatalog()
+businessApi.getOrders(params)
+businessApi.getCoupons(params)
+trackingApi.createLink(conversationId, { destination_url, label })
+trackingApi.listLinks(conversationId)
 ```
 
 ## Plugin WordPress (v1.1.0)
@@ -173,6 +216,8 @@ Hooks tiempo real:
 
 Payload producto incluye: name, price, description, category, image_url, stock_quantity, sku, is_available
 Auth: Header `X-VentaTalk-Token`
+
+**Planeado:** v1.2.0 agrega `product_url` al payload, v1.3.0 agrega registro de conversiones (`?vt_conv=` → POST `/track/{token}/conversion`).
 
 ## Patrones Backend
 
@@ -216,6 +261,11 @@ catch { setItems(prev => prev.map(i => i.id === id ? {...i, is_available: !newVa
 // Badges de estado órdenes
 pending/on-hold → amarillo | processing → azul | completed → verde
 cancelled/failed → rojo | refunded → naranja
+
+// Features toggle (Record<string, boolean>, no array)
+const current: Record<string, boolean> = business.features ?? {}
+const next = { ...current, [key]: !current[key] }
+adminApi.businesses.updateFeatures(id, next)
 ```
 
 ## Errores Conocidos
@@ -229,6 +279,8 @@ cancelled/failed → rojo | refunded → naranja
 7. **Frontend OOM** → mem_limit 1.5g + swap 2GB
 8. **Deploy timeout** → timeout-minutes: 20, command_timeout: 18m
 9. **Ramas divergentes en VPS** → git config pull.rebase false && git pull
+10. **`next build` corre `tsc` en TODO el repo** → un error de tipos en cualquier archivo rompe el deploy. Verificar con `npx tsc --noEmit` antes de pushear cambios de tipo. No hay "commits parciales con errores pendientes" en este pipeline.
+11. **Bash interpola `$` en comillas dobles** → al pasar hashes bcrypt (`$2b$12$...`) por `psql -c "..."`, bash interpreta `$2b`, `$12`, etc. como variables vacías y mutila el hash. Solución: usar `psql` interactivo (`docker compose exec db psql ...` sin `-c`) y pegar el UPDATE adentro, donde las comillas son de SQL no de bash. Verificar con `SELECT length(hashed_password)` (debe ser 60).
 
 ## Comandos VPS
 
@@ -241,6 +293,16 @@ docker compose -f docker-compose.prod.yml exec api alembic revision --autogenera
 docker compose -f docker-compose.prod.yml exec db psql -U ventatalk -d ventatalk
 chown -R hanowar:hanowar /home/hanowar/REPO/
 git config pull.rebase false  # si hay ramas divergentes
+
+# Login y obtener token (testing de endpoints)
+TOKEN=$(curl -s -X POST https://api.ventatalk.com/api/v1/auth/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin@ventatalk.com&password=PASSWORD" \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+# Usar token
+curl -s "https://api.ventatalk.com/api/v1/admin/businesses?page=1" \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 
 ## Reglas de Negocio
@@ -250,6 +312,8 @@ git config pull.rebase false  # si hay ramas divergentes
 - Superadmin: login normal, verificado por SUPERADMIN_EMAIL=admin@ventatalk.com
 - WhatsApp outbound: SOLO templates aprobados por Meta
 - Tokens integración: siempre Fernet encrypt, UI solo últimos 4-8 chars
+- Tracking links: el formato actual expone `api.ventatalk.com/track/{token}`. Tracking 2.0 lo reemplaza por `{product_url}?vt_conv={token}` (ver SPEC.md sección 13).
+- Bsale no tiene tienda pública → `product_url = NULL`, sus productos no son trackeables vía link.
 
 ## Clientes Piloto
 

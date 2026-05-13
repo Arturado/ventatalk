@@ -28,7 +28,7 @@ VentaTalk es un agente de ventas IA para WhatsApp + CRM, orientado a PYMEs chile
 |---|---|---|
 | `ventatalk` | github.com/Arturado/ventatalk | Activo — app + backend |
 | `ventatalk-web` | github.com/Arturado/ventatalk-web | Activo — landing |
-| `ventatalk-admin` | github.com/Arturado/ventatalk-admin | Activo — panel superadmin (MVP en progreso) |
+| `ventatalk-admin` | github.com/Arturado/ventatalk-admin | Activo — panel superadmin (MVP funcional) |
 
 ### Estructura en VPS (`/home/hanowar/`)
 ```
@@ -53,6 +53,7 @@ wordpress-agencia-dn/   ← instancia WordPress cliente (no tocar)
 - Celery + Redis (workers y beat scheduler)
 - OpenAI GPT-4o-mini (RAG + embeddings)
 - Fernet encryption para tokens de integraciones
+- `bcrypt==4.0.1` pinneado (compatibilidad con passlib 1.7.4)
 
 ### Frontend (app + admin)
 - Next.js + Tailwind CSS
@@ -96,6 +97,10 @@ SUPERADMIN_EMAIL=admin@ventatalk.com
 - `004_conversion_tokens`
 - `005_plan_catalog_limit`
 - `006_add_billing_features_channel` — billing, features JSONB, channel en conversaciones
+- `007_orders_coupons` — tablas orders y coupons con UniqueConstraint por source
+
+### Migraciones planeadas
+- `008_catalog_product_url` — agrega `product_url` a CatalogItem (Tracking 2.0 Fase 1, ver sección 13)
 
 ### Modelos principales
 - `Business` — tenant (cliente del SaaS)
@@ -105,6 +110,7 @@ SUPERADMIN_EMAIL=admin@ventatalk.com
 - `Message` — mensajes individuales
 - `Lead` — pipeline de ventas
 - `CatalogItem` — productos con embeddings pgvector
+- `Order`, `Coupon` — ingestados vía conectores
 - `FollowUpSequence/Step/Log` — secuencias de seguimiento
 - `ConversionToken` — tracking de conversiones `?vt_conv=`
 
@@ -114,7 +120,7 @@ plan: PlanType          # starter | pro | max
 billing_cycle: str      # monthly | annual
 stripe_customer_id: str
 stripe_subscription_id: str
-features: JSONB         # features activos por plan + add-ons
+features: JSONB         # Record<string, boolean> — feature flags por tenant. null por defecto.
 conversations_this_month: int
 conversations_reset_at: datetime
 max_phone_numbers: int
@@ -163,6 +169,8 @@ max_conversations_per_month: int
 - `GET /catalog`
 - `POST /catalog` (upload CSV)
 - `GET /usage`
+- `GET /orders` (paginado)
+- `GET /coupons` (paginado)
 
 ### Conversaciones, Contactos, Leads, Analytics
 - CRUD completo implementado
@@ -172,7 +180,7 @@ max_conversations_per_month: int
 - Bsale: connect, sync, status, disconnect, price-lists
 - Shopify: connect, sync, status, disconnect
 - MercadoLibre: connect, sync, status, disconnect
-- WooCommerce: token, status, ingest, revoke
+- WooCommerce: token, status, ingest, ingest/orders, ingest/coupons, revoke
 
 ### Billing (`/api/v1/billing/`)
 - `POST /create-checkout-session`
@@ -184,12 +192,13 @@ max_conversations_per_month: int
 - `POST /conversations/{id}/tracking-link`
 - `GET /conversations/{id}/tracking-links`
 - `GET /track/{token}` (público, redirige)
+- Ver sección 13 para flujo completo y Tracking 2.0 planeado.
 
-### Admin (`/api/v1/admin/`) ← NUEVO
+### Admin (`/api/v1/admin/`)
 - `GET /stats/overview`
-- `GET /businesses?page=&search=&limit=`
-- `GET /businesses/{id}`
-- `PATCH /businesses/{id}/features`
+- `GET /businesses?page&search&limit` → `{ items, total, page, limit }`
+- `GET /businesses/{id}` → mismo shape que un item de la lista
+- `PATCH /businesses/{id}/features` — recibe `Record<string, boolean>`
 - `PATCH /businesses/{id}/plan`
 - Requiere: JWT + email == SUPERADMIN_EMAIL
 
@@ -207,13 +216,16 @@ max_conversations_per_month: int
 |---|---|---|
 | Login | `/auth/login` | ✅ |
 | Dashboard overview | `/dashboard` | ✅ |
-| Conversaciones | `/dashboard/conversations` | ✅ |
+| Conversaciones | `/dashboard/conversations` | ✅ con panel de tracking links integrado |
 | Contactos | `/dashboard/contacts` | ✅ |
 | Leads / Pipeline | `/dashboard/leads` | ✅ |
+| Ecommerce / Productos | `/dashboard/ecommerce/productos` | ✅ |
+| Ecommerce / Órdenes | `/dashboard/ecommerce/orders` | ✅ |
+| Ecommerce / Cupones | `/dashboard/ecommerce/cupones` | ✅ |
 | Integraciones | `/dashboard/integrations` | ✅ |
 | Configuración | `/dashboard/settings` | ✅ |
 
-**Pendiente de rediseño completo con Claude Design.**
+**Pendiente de rediseño completo con Claude Design** (P1 — ver TODO.md).
 
 ---
 
@@ -222,28 +234,31 @@ max_conversations_per_month: int
 | Sección | Path | Estado |
 |---|---|---|
 | Login | `/auth/login` | ✅ funcional |
-| Dashboard stats | `/dashboard` | ✅ implementado, pendiente verificar |
-| Lista clientes | `/dashboard/clientes` | ✅ implementado, pendiente verificar |
-| Detalle cliente | `/dashboard/clientes/[id]` | ✅ implementado, pendiente verificar |
+| Dashboard stats | `/dashboard` | ✅ verificado |
+| Lista clientes | `/dashboard/clientes` | ✅ verificado |
+| Detalle cliente | `/dashboard/clientes/[id]` | ✅ verificado (edición plan/features funcional) |
 
-**Bug conocido:** El middleware de Next.js estaba nombrado `proxy` en lugar de `middleware` — ya corregido. Verificar flujo completo de login → dashboard.
+**Pendiente de rediseño con Claude Design** (P1 — ver TODO.md).
 
 ---
 
 ## 11. Integraciones de Catálogo
 
-| Integración | Tipo | Estado |
-|---|---|---|
-| Jumpseller | Pull (API) | ✅ Funcionando — Pace Coffee 15 productos |
-| Bsale | Pull (API) | ✅ Funcionando — 161 productos (límite 500) |
-| WooCommerce | Push (plugin WordPress) | ✅ Plugin instalado en cliente |
-| Shopify | Pull (API) | ✅ Implementado, sin cliente activo |
-| MercadoLibre | Pull (API) | ✅ Implementado, sin cliente activo |
+| Integración | Tipo | Estado | URL de producto |
+|---|---|---|---|
+| Jumpseller | Pull (API) | ✅ Funcionando — Pace Coffee 15 productos | `{shop_domain}/products/{permalink}` |
+| Bsale | Pull (API) | ✅ Funcionando — 161 productos (límite 500) | ❌ No tiene tienda pública (ERP) |
+| WooCommerce | Push (plugin WordPress) | ✅ Plugin instalado en MP Cars + clínica | `get_permalink($id)` |
+| Shopify | Pull (API) | ✅ Implementado, sin cliente activo | `{shop_domain}/products/{handle}` |
+| MercadoLibre | Pull (API) | ✅ Implementado, sin cliente activo | `permalink` del API |
 
 ### Plugin WordPress (`ventatalk`)
 - Path en repo: `scripts/wordpress-plugin/ventatalk/`
+- Versión actual: **v1.1.0**
 - Funciones: widget WhatsApp, sync manual catálogo, sync automático en tiempo real (hooks WooCommerce)
 - Configuración: token API + URL servidor en WordPress admin
+- **Planeado v1.2.0:** agregar `product_url` al payload de productos (Tracking 2.0 Fase 2a)
+- **Planeado v1.3.0:** registro de conversiones (Tracking 2.0 Fase 4a)
 
 ---
 
@@ -257,7 +272,68 @@ max_conversations_per_month: int
 
 ---
 
-## 13. Canal Instagram (Add-on — Pendiente)
+## 13. Tracking de Conversiones
+
+### Estado actual (Tracking 1.0)
+
+**Flujo:**
+1. Agente humano abre conversación en `/dashboard/conversations`, le da al botón "Links".
+2. Llena modal con `destination_url` (URL manual) y `label` opcional.
+3. Frontend llama `POST /api/v1/conversations/{id}/tracking-link`.
+4. Backend genera token, crea registro en `conversion_tokens`, devuelve `tracking_url = https://api.ventatalk.com/track/{token}`.
+5. Agente copia el link al portapapeles, lo pega en su respuesta de WhatsApp.
+6. Lead hace click → `GET /track/{token}` → backend marca click, redirige al `destination_url`.
+7. Conversión se marca manualmente o vía webhook futuro (no implementado aún).
+
+**Limitaciones actuales:**
+- El link expone `api.ventatalk.com` → mala UX para el lead, branding débil para el cliente, confianza baja en WhatsApp.
+- URLs de productos hay que copiarlas manualmente porque `CatalogItem` no tiene `product_url`.
+- La IA no genera links automáticamente.
+- No hay registro automático de conversiones (solo clicks).
+- Sin dashboard agregado de conversiones.
+
+### Tracking 2.0 — Diseño objetivo
+
+**Cambio fundamental:** el link público es la URL del cliente con `?vt_conv={token}` appendado, no un dominio de VentaTalk.
+
+**Ejemplo:**
+```
+Antes: https://api.ventatalk.com/track/RLS7zbK71AedbQ-kZkxTSrWdYvnPJpKwv0VH6yH9hV0
+Después: https://pacecoffeeroasters.com/products/cafe-yirgacheffe?vt_conv=RLS7zbK71...
+```
+
+**Componentes:**
+
+1. **Modelo:** `CatalogItem.product_url` (VARCHAR(500) NULL) — URL completa del producto en la tienda del cliente. Null para Bsale.
+
+2. **Backfill por conector** durante sync:
+   - WooCommerce: `get_permalink($id)` (plugin v1.2.0+)
+   - Jumpseller: `{shop_domain}/products/{permalink}`
+   - Shopify: `{shop_domain}/products/{handle}`
+   - MercadoLibre: `permalink` del API
+   - Bsale: `NULL` (documentado, sin tienda pública)
+
+3. **Endpoint actualizado:** `POST /conversations/{id}/tracking-link` acepta:
+   - `catalog_item_id` (preferido): backend resuelve `product_url` del item
+   - `destination_url` (fallback manual): edge case, agente quiere mandar link no-producto
+   - Si item no tiene `product_url` → error 400
+
+4. **Registro de conversiones — 3 modos que conviven:**
+   - **Plugin WordPress v1.3.0:** hook `woocommerce_thankyou`, lee cookie con token, llama `POST /track/{token}/conversion`.
+   - **Pixel JS** (`/static/vt-pixel.js`): detecta `?vt_conv=`, guarda en cookie 90 días, dispara en thank-you page del cliente.
+   - **Webhook de orden** (Jumpseller, Shopify): respaldo server-side, busca UTM/metadata de la orden.
+
+5. **Compatibilidad:** `/track/{token}` se mantiene como fallback redirect para clientes sin pixel/plugin (degrada elegantemente).
+
+6. **UI:**
+   - Catálogo: columna "URL" con badge "Sin URL — no trackeable" cuando aplica.
+   - Conversaciones: selector de producto del catálogo (dropdown searchable) reemplaza el input manual de URL.
+
+**Documentación granular de fases en TODO.md.**
+
+---
+
+## 14. Canal Instagram (Add-on — Pendiente)
 
 - Mismo agente IA respondiendo Instagram DM
 - $20 USD/mes add-on
@@ -267,31 +343,34 @@ max_conversations_per_month: int
 
 ---
 
-## 14. Pendientes Técnicos
+## 15. Pendientes Técnicos
+
+> Lista resumida. Detalle priorizado en `TODO.md`.
 
 ### Críticos
-- [ ] Verificar flujo completo login → dashboard en `admin.ventatalk.com`
-- [ ] Frontend `app.ventatalk.com` cae solo (OOM) — swap 2GB + mem_limit 1.5g aplicados, monitorear
+_(ninguno crítico al día de hoy)_
 
 ### Alta prioridad
-- [ ] Rediseño completo frontend `app.ventatalk.com` con Claude Design
-- [ ] Completar `ventatalk-admin` — verificar todas las pantallas
+- Tracking 2.0 (6 fases — ver sección 13 y TODO.md)
+- Rediseño completo `app.ventatalk.com` con Claude Design
+- Rediseño `admin.ventatalk.com` con Claude Design
 
 ### Media prioridad
-- [ ] Módulo carritos abandonados (extender Celery beat)
-- [ ] Módulo Reviews (solicitar reseña al cierre de conversación)
-- [ ] Conversion tracking `?vt_conv=` — lógica frontend pendiente
+- Dashboard de conversiones agregado (`/analytics/conversions`)
+- Módulo carritos abandonados
+- Módulo Reviews
+- IA genera tracking links automáticamente (depende de Tracking 2.0)
+- Órdenes y cupones para Jumpseller, Bsale, Shopify, MercadoLibre
 
 ### Backlog
-- [ ] GitHub Actions para `ventatalk-admin` (falta deploy key en repo)
-- [ ] Bsale bulk price list (fix precios faltantes por variante)
-- [ ] Límite productos Bsale dinámico por plan
-- [ ] Módulo B2B / Cotizaciones
-- [ ] Canal Instagram DM
+- Canal Instagram DM
+- Módulo B2B / Cotizaciones
+- Campañas outbound (Pro+)
+- Bsale bulk price list
 
 ---
 
-## 15. Decisiones Técnicas Clave
+## 16. Decisiones Técnicas Clave
 
 | Decisión | Razón |
 |---|---|
@@ -304,5 +383,8 @@ max_conversations_per_month: int
 | Features por tenant en JSONB | Activar/desactivar módulos sin redesplegar |
 | SUPERADMIN_EMAIL en .env | Más simple y seguro que campo en DB para MVP |
 | `asyncpg enum casing bug` | Fix: `values_callable=lambda x: [e.value for e in x]` en todos los Enum columns |
-| `bcrypt` | Pin `bcrypt==4.0.1` |
+| `bcrypt==4.0.1` pinneado | Compatibilidad con passlib 1.7.4 |
 | `git stash` en deploy | Evita conflictos cuando se editan archivos directo en VPS |
+| `next build` corre `tsc` en TODO el repo | Los fixes de tipo deben ser end-to-end; no hay "commit parcial con errores pendientes" |
+| Tracking link usa dominio del cliente (Tracking 2.0) | UX, confianza del lead, branding. Mantenemos `/track/{token}` solo como fallback |
+| Bash interpola `$` en hashes bcrypt | Para reset de password en DB: usar `psql` interactivo, no `psql -c "..."` con doble quote |
