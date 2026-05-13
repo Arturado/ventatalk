@@ -19,12 +19,10 @@ _(vacío — todo lo crítico al día)_
 > **Justificación de prioridad:** valor directo para el cliente (mide ventas atribuidas a VentaTalk), va antes del rediseño porque "demostrar ventas" es lo que retiene clientes pagados.
 > **Documentación completa:** ver SPEC.md sección 13.
 
-- [ ] **Fase 1 — Modelo de datos: `product_url` en CatalogItem**
-  - Migración Alembic `008_catalog_product_url`: agregar campo `product_url VARCHAR(500) NULL`
-  - Modelo SQLAlchemy actualizado
-  - `GET /business/catalog` devuelve `product_url`
-  - Interface `CatalogItem` en `lib/api.ts` actualizada
-  - Deploy seguro: campo `null` por defecto, no rompe nada existente
+- [x] **Fase 1 — Modelo de datos: `product_url` en CatalogItem** ✅
+  - Migración 008 aplicada en producción
+  - `GET /business/catalog` devuelve `product_url: null` en todos los items
+  - Pendiente backfill (Fase 2)
 
 - [ ] **Fase 2 — Backfill por conector (llenar `product_url` durante sync)**
   - [ ] 2a. WooCommerce (plugin push) → `get_permalink($id)` en payload. Bump a v1.2.0
