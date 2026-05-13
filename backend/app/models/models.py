@@ -323,6 +323,8 @@ class CatalogItem(Base, UUIDMixin, TimestampMixin):
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
 
+    product_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     # Integración externa (jumpseller, bsale, shopify, csv)
     source: Mapped[str] = mapped_column(String(50), default="csv")
     external_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

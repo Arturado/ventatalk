@@ -275,6 +275,7 @@ export interface CatalogItem {
   image_url?: string;
   stock_quantity?: number;
   sku?: string;
+  product_url?: string;
 }
 
 export const businessApi = {

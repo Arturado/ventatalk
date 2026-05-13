@@ -73,6 +73,7 @@ class CatalogItemOut(BaseModel):
     image_url: Optional[str] = None
     stock_quantity: Optional[int] = None
     sku: Optional[str] = None
+    product_url: Optional[str] = None
 
 
 # ── Selector de fuente ────────────────────────────────────────────────
@@ -327,6 +328,7 @@ async def get_catalog(
             image_url=(item.metadata_ or {}).get("image_url"),
             stock_quantity=(item.metadata_ or {}).get("stock_quantity"),
             sku=(item.metadata_ or {}).get("sku"),
+            product_url=item.product_url,
         )
         for item in items
     ]
