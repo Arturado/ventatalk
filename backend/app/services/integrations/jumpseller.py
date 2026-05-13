@@ -51,6 +51,21 @@ class JumpsellerService:
                 return resp.json()
             raise ValueError(f"Credenciales inválidas: {resp.status_code} {resp.text}")
 
+    async def fetch_store_info(self) -> dict | None:
+        """Trae info de la tienda (incluye URL del dominio). None si falla."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{JUMPSELLER_API}/store/info.json",
+                    auth=self.auth,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("store", data)
+        except Exception as e:
+            logger.warning(f"Jumpseller: error obteniendo store info: {e}")
+        return None
+
     async def fetch_products(self) -> list[dict]:
         """Trae todos los productos de la tienda con paginación automática."""
         products = []
@@ -95,6 +110,21 @@ class JumpsellerService:
         logger.info(f"Jumpseller: total {len(products)} productos obtenidos")
         return products
 
+    async def fetch_product_detail(self, product_id: int | str) -> dict | None:
+        """Trae el detalle individual de un producto (incluye permalink). None si falla."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{JUMPSELLER_API}/products/{product_id}.json",
+                    auth=self.auth,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("product", data)
+        except Exception as e:
+            logger.warning(f"Jumpseller: error obteniendo detalle producto {product_id}: {e}")
+        return None
+
     async def sync_catalog(self, db: AsyncSession, business_id: str) -> dict:
         """
         Sincroniza el catálogo completo de Jumpseller a la DB de VentaTalk.
@@ -107,9 +137,26 @@ class JumpsellerService:
         if not raw_products:
             return stats
 
-        # 2. Normalizar productos
-        normalized = [self._normalize_product(p) for p in raw_products]
-        normalized = [p for p in normalized if p]  # filtrar Nones
+        # 2. Resolver shop_url una vez para todo el sync
+        store_info = await self.fetch_store_info()
+        shop_url = (store_info or {}).get("url", "").rstrip("/") if store_info else None
+        if not shop_url:
+            logger.warning("Jumpseller: shop_url no disponible, product_url quedará null")
+
+        # Normalizar productos resolviendo permalink individual
+        normalized = []
+        for p in raw_products:
+            raw = p.get("product", p)
+            product_id = raw.get("id")
+            permalink = None
+            if shop_url and product_id:
+                detail = await self.fetch_product_detail(product_id)
+                if detail:
+                    permalink = detail.get("permalink")
+            product_url = f"{shop_url}/products/{permalink}" if shop_url and permalink else None
+            n = self._normalize_product(p, product_url=product_url)
+            if n:
+                normalized.append(n)
 
         # 3. IDs actuales en Jumpseller
         jumpseller_ids = {p["external_id"] for p in normalized}
@@ -148,7 +195,7 @@ class JumpsellerService:
         )
         return stats
 
-    def _normalize_product(self, raw: dict) -> Optional[dict]:
+    def _normalize_product(self, raw: dict, product_url: str | None = None) -> Optional[dict]:
         """Convierte el formato Jumpseller al formato interno de VentaTalk."""
         try:
             product = raw.get("product", raw)  # a veces viene anidado
@@ -184,6 +231,7 @@ class JumpsellerService:
                 "stock": product.get("stock", 0),
                 "sku": product.get("sku"),
                 "url": product.get("url"),
+                "product_url": product_url,
             }
         except Exception as e:
             logger.warning(f"Error normalizando producto: {e} — {raw}")
@@ -271,6 +319,7 @@ class JumpsellerService:
             existing.category = data["category"]
             existing.is_available = True
             existing.embedding = embedding
+            existing.product_url = data.get("product_url")
             existing.metadata_ = {
                 "sku": data.get("sku"),
                 "url": data.get("url"),
@@ -290,6 +339,7 @@ class JumpsellerService:
                 embedding=embedding,
                 source="jumpseller",
                 external_id=data["external_id"],
+                product_url=data.get("product_url"),
                 metadata_={
                     "sku": data.get("sku"),
                     "url": data.get("url"),

@@ -901,11 +901,15 @@ async def _run_jumpseller_sync(business_id: str, login: str, auth_token_encrypte
             js = JumpsellerService(login=login, auth_token=auth_token)
             stats = await js.sync_catalog(db, business_id)
 
+            store_info = await js.fetch_store_info()
+
             result = await db.execute(select(Business).where(Business.id == business_id))
             business = result.scalar_one_or_none()
             if business and business.integrations:
                 business.integrations["jumpseller"]["last_sync_at"] = datetime.now(timezone.utc).isoformat()
                 business.integrations["jumpseller"]["products_synced"] = stats["created"] + stats["updated"]
+                if store_info and store_info.get("url"):
+                    business.integrations["jumpseller"]["shop_url"] = store_info["url"].rstrip("/")
                 business.integrations["active_catalog_source"] = "jumpseller"
                 flag_modified(business, "integrations")
                 await db.commit()
