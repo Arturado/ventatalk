@@ -189,10 +189,10 @@ class JumpsellerService:
 
         # Resolver prefix (cacheado o detectado)
         url_prefix = cached_url_prefix
-        if url_prefix is None and shop_url and product_details:
+        if not url_prefix and shop_url and product_details:
             first_permalink = next(iter(product_details.values()))
             url_prefix = await self.detect_url_prefix(shop_url, first_permalink)
-        elif url_prefix is None:
+        elif not url_prefix:
             url_prefix = "/products/"
 
         # Normalizar con product_url completo
