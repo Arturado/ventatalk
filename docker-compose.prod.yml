@@ -43,9 +43,11 @@ services:
 
   beat:
     build: ./backend
-    command: celery -A app.workers.celery_app beat --loglevel=info
+    command: celery -A app.workers.celery_app beat --loglevel=info --schedule=/celery/celerybeat-schedule --pidfile=/celery/celerybeat.pid
     restart: always
     env_file: .env.production
+    volumes:
+      - celery_beat_data:/celery
     depends_on:
       - redis
 
@@ -61,7 +63,7 @@ services:
     mem_limit: 1.5g
     cpus: "1.0"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,3 +72,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  celery_beat_data:

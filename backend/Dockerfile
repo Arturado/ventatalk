@@ -29,6 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /build/wheels /wheels
 RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
 
+# Directorio para Celery beat schedule
+RUN mkdir -p /celery && chown -R ventatalk:ventatalk /celery
+
 # Copiar el código con dueño correcto
 COPY --chown=ventatalk:ventatalk . .
 
