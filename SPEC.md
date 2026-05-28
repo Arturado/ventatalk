@@ -1,7 +1,7 @@
 # VentaTalk — SPEC General del Proyecto
 
 > Documento de referencia técnica y de producto. Actualizar antes de iniciar cualquier desarrollo nuevo.
-> Última actualización: Mayo 2026
+> Última actualización: Mayo 2026 (post-reconstrucción VPS)
 
 ---
 
@@ -13,68 +13,88 @@ VentaTalk es un agente de ventas IA para WhatsApp + CRM, orientado a PYMEs chile
 
 ## 2. Arquitectura de Subdominios
 
-| Subdominio | Repo | Puerto | Propósito |
+| Subdominio | Repo | Puerto local | Propósito |
 |---|---|---|---|
 | `ventatalk.com` | `ventatalk-web` | 3001 | Landing, planes, registro, checkout Stripe |
 | `app.ventatalk.com` | `ventatalk` (frontend) | 3000 | Dashboard del cliente |
 | `api.ventatalk.com` | `ventatalk` (backend) | 8000 | API FastAPI — compartida por todos |
 | `admin.ventatalk.com` | `ventatalk-admin` | 3002 | Panel interno VentaTalk (superadmin) |
 
+Todos sirviendo HTTPS desde un único VPS en `179.43.124.82` (Donweb) vía Nginx → containers Docker.
+
 ---
 
 ## 3. Repositorios
 
-| Repo | URL | Estado |
-|---|---|---|
-| `ventatalk` | github.com/Arturado/ventatalk | Activo — app + backend |
-| `ventatalk-web` | github.com/Arturado/ventatalk-web | Activo — landing |
-| `ventatalk-admin` | github.com/Arturado/ventatalk-admin | Activo — panel superadmin (MVP funcional) |
+| Repo | URL | Versión Next.js | Estado |
+|---|---|---|---|
+| `ventatalk` | github.com/Arturado/ventatalk | 15.5.18 | Activo — backend + frontend app |
+| `ventatalk-web` | github.com/Arturado/ventatalk-web | 14.2.29 ⚠️ | Activo — landing (migrar a 15.x P1) |
+| `ventatalk-admin` | github.com/Arturado/ventatalk-admin | 16.2.6 | Activo — panel superadmin |
 
 ### Estructura en VPS (`/home/hanowar/`)
 ```
 ventatalk/              ← repo principal (backend + frontend app)
 ventatalk-web/          ← landing ventatalk.com
 ventatalk-admin/        ← panel superadmin
-wordpress-agencia-dn/   ← instancia WordPress cliente (no tocar)
+.ssh/deploy_keys/       ← 3 deploy keys (1 por repo), read-only
 ```
 
 ### Deploy automático
 - Cada repo tiene `.github/workflows/deploy.yml`
 - Push a `main` → GitHub Actions → SSH al VPS → `git stash + git pull + docker compose up --build`
 - Secrets en GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT`
+- ⚠️ Tras reconstrucción: verificar que GitHub Secrets apuntan a las nuevas deploy keys
 
 ---
 
 ## 4. Stack Técnico
 
 ### Backend
-- Python + FastAPI (async)
-- SQLAlchemy async + PostgreSQL + pgvector
-- Celery + Redis (workers y beat scheduler)
-- OpenAI GPT-4o-mini (RAG + embeddings)
+- Python 3.12 + FastAPI (async)
+- SQLAlchemy async + PostgreSQL 16 + pgvector
+- Celery + Redis 7 (worker + beat scheduler con volume persistente)
+- OpenAI GPT-4o-mini (RAG + embeddings text-embedding-3-small)
 - Fernet encryption para tokens de integraciones
-- `bcrypt==4.0.1` pinneado (compatibilidad con passlib 1.7.4)
+- Dockerfile **multi-stage** con `USER ventatalk` (non-root) en runtime
 
 ### Frontend (app + admin)
 - Next.js + Tailwind CSS
 - Auth con JWT (localStorage + cookie `admin_token` para el admin)
-- `output: "standalone"` en `next.config.ts`
+- `output: "standalone"` en `next.config.ts` (frontend principal y admin)
+- Dockerfile **multi-stage** con `USER node` (non-root) en runtime
+
+### ventatalk-web
+- Next.js single-stage build
+- Dockerfile con `chown -R node:node /app` + `USER node`
+- Sin standalone output
 
 ### Infraestructura
-- VPS único IP `179.43.124.82` (Donweb)
+- VPS único `179.43.124.82` (Donweb)
+- Ubuntu 22.04 LTS, 5.8 GB RAM + 2 GB swap, 45 GB disco
 - Docker Compose por proyecto
-- Nginx como reverse proxy + SSL Certbot
+- Nginx 1.18.0 como reverse proxy + SSL Certbot (snap)
 - `admin.ventatalk.com` con `X-Robots-Tag: noindex, nofollow`
-- Swap 2GB configurado en VPS
 - CI/CD: GitHub Actions
+
+### Hardening (post-hack mayo 2026)
+- SSH solo por key en puerto **5743** (puerto 22 cerrado en UFW y Donweb edge firewall)
+- Root login deshabilitado, password auth deshabilitado
+- Usuario `hanowar` con sudo, key-only auth, en grupo docker
+- UFW activo: 5743/80/443 abiertos; resto cerrado
+- Fail2ban activo (3 fails/10min = ban 1h, IP propietaria en `ignoreip`)
+- Donweb edge firewall configurado en paralelo (defensa en profundidad)
+- Containers **non-root** en todos los servicios (frontend node, backend ventatalk, web node, admin node)
+- Sin `gcc`/`-dev` en imágenes runtime (multi-stage los descarta)
+- Automatic-Reboot deshabilitado en unattended-upgrades
 
 ---
 
 ## 5. Variables de Entorno
 
 ### Estructura
-- Local: `.env.development` (no va al repo)
-- VPS: `.env.production` (no va al repo)
+- Local: `.env.development` (en `.gitignore`, NUNCA al repo)
+- VPS: `.env.production` (en `.gitignore`, NUNCA al repo)
 - Repo: `.env.example` (sin valores reales)
 
 ### Variables clave de producción (VPS)
@@ -84,7 +104,22 @@ APP_URL=https://app.ventatalk.com
 API_URL=https://api.ventatalk.com
 NEXT_PUBLIC_API_URL=https://api.ventatalk.com
 SUPERADMIN_EMAIL=admin@ventatalk.com
+POSTGRES_USER=ventatalk    # renombrado desde "ventabot"
+POSTGRES_DB=ventatalk_db   # renombrado desde "ventabot_db"
+WIDGET_BUSINESS_ID=ac239145-a993-4661-9287-341c0ed91e40
 ```
+
+### Credenciales sensibles (en password manager, rotadas mayo 2026)
+- SECRET_KEY (JWT)
+- FERNET_KEY (encrypt de tokens)
+- POSTGRES_PASSWORD
+- OPENAI_API_KEY
+- STRIPE_SECRET_KEY (rolled en panel)
+- META_VERIFY_TOKEN
+
+### Pendientes de configurar
+- STRIPE_WEBHOOK_SECRET (después de crear webhook en panel Stripe)
+- WA_TEST_ACCESS_TOKEN, META_APP_SECRET (regenerar en developers.facebook.com)
 
 ---
 
@@ -92,15 +127,13 @@ SUPERADMIN_EMAIL=admin@ventatalk.com
 
 ### Migraciones aplicadas
 - `001_initial` — tablas base
-- `002_catalog_integrations`
-- `003_business_integrations`
-- `004_conversion_tokens`
-- `005_plan_catalog_limit`
-- `006_add_billing_features_channel` — billing, features JSONB, channel en conversaciones
-- `007_orders_coupons` — tablas orders y coupons con UniqueConstraint por source
-
-### Migraciones planeadas
-- `008_catalog_product_url` — agrega `product_url` a CatalogItem (Tracking 2.0 Fase 1, ver sección 13)
+- `002_catalog_integrations` — campos `source` y `external_id` en catalog_items
+- `003_business_integrations` — `integrations` JSONB en businesses
+- `004_conversion_tokens` — tabla conversion_tokens
+- `005_plan_catalog_limit` — `max_catalog_items` en businesses
+- `006_billing_features_channel` — billing fields, features JSONB, channel en conversations
+- `007_orders_coupons` — tablas orders y coupons
+- `008_catalog_product_url` — campo `product_url` (Tracking 2.0 Fase 1)
 
 ### Modelos principales
 - `Business` — tenant (cliente del SaaS)
@@ -109,10 +142,11 @@ SUPERADMIN_EMAIL=admin@ventatalk.com
 - `Conversation` — hilos de conversación (campo `channel`: whatsapp/instagram)
 - `Message` — mensajes individuales
 - `Lead` — pipeline de ventas
-- `CatalogItem` — productos con embeddings pgvector
-- `Order`, `Coupon` — ingestados vía conectores
+- `CatalogItem` — productos con embeddings pgvector + `product_url`
 - `FollowUpSequence/Step/Log` — secuencias de seguimiento
 - `ConversionToken` — tracking de conversiones `?vt_conv=`
+- `Order` — órdenes sincronizadas desde ecommerce
+- `Coupon` — cupones sincronizados desde ecommerce
 
 ### Campos importantes en Business
 ```python
@@ -120,12 +154,20 @@ plan: PlanType          # starter | pro | max
 billing_cycle: str      # monthly | annual
 stripe_customer_id: str
 stripe_subscription_id: str
-features: JSONB         # Record<string, boolean> — feature flags por tenant. null por defecto.
+features: JSONB         # features activos por plan + add-ons
 conversations_this_month: int
 conversations_reset_at: datetime
 max_phone_numbers: int
 max_conversations_per_month: int
+max_catalog_items: int
+integrations: JSONB     # config encriptada de cada integración
 ```
+
+### Businesses creados (post-reconstrucción)
+| Nombre | UUID | Email | Plan |
+|---|---|---|---|
+| VentaTalk Admin Demo | `67546dec-9b0b-49a1-ae38-d2db96312310` | admin@ventatalk.com | starter |
+| VentaTalk Web | `ac239145-a993-4661-9287-341c0ed91e40` | widget@ventatalk.com | starter |
 
 ---
 
@@ -154,51 +196,57 @@ max_conversations_per_month: int
 | MercadoLibre | $150 |
 | Instagram | $20 |
 
+Stripe price IDs configurados:
+- `STRIPE_PRICE_STARTER=price_1TOVtfEmXjEhxagVXBLqfG2J`
+- `STRIPE_PRICE_PRO=price_1TOVzCEmXjEhxagVG0lQkCKl`
+- `STRIPE_PRICE_MAX=price_1TOVzTEmXjEhxagVmwSVSilq`
+
 ---
 
 ## 8. Endpoints Backend — Estado Actual
 
 ### Auth (`/api/v1/auth/`)
-- `POST /login` — OAuth2PasswordRequestForm
-- `POST /register`
+- `POST /login` — OAuth2PasswordRequestForm (username = email)
+- `POST /register` — crea business + tokens
 - `POST /refresh`
 - `GET /me`
 
 ### Business (`/api/v1/business/`)
 - `GET/PUT /profile`
-- `GET /catalog`
-- `POST /catalog` (upload CSV)
+- `GET /catalog`, `POST /catalog` (CSV upload)
+- `DELETE /catalog/source/{name}`
+- `PATCH /catalog/{id}/toggle`
+- `GET/POST /catalog/source`
+- `GET /orders?page&limit&search&status&payment_method` (paginado)
+- `GET /coupons?page&limit&search&is_active` (paginado)
 - `GET /usage`
-- `GET /orders` (paginado)
-- `GET /coupons` (paginado)
 
 ### Conversaciones, Contactos, Leads, Analytics
-- CRUD completo implementado
+CRUD completo implementado.
 
 ### Integraciones (`/api/v1/integrations/`)
-- Jumpseller: connect, sync, status, disconnect
+- Jumpseller: connect, sync (con auto-detect URL prefix), status, disconnect
 - Bsale: connect, sync, status, disconnect, price-lists
 - Shopify: connect, sync, status, disconnect
 - MercadoLibre: connect, sync, status, disconnect
-- WooCommerce: token, status, ingest, ingest/orders, ingest/coupons, revoke
+- WooCommerce: token, status, ingest (productos/órdenes/cupones), revoke
 
 ### Billing (`/api/v1/billing/`)
 - `POST /create-checkout-session`
-- `POST /webhook` (Stripe)
+- `POST /webhook` (Stripe — pendiente configurar webhook secret post-reconstrucción)
 - `GET /portal`
-- Maneja: checkout.session.completed, subscription.updated, subscription.deleted
+- Maneja: `checkout.session.completed`, `subscription.updated`, `subscription.deleted`
 
 ### Tracking (`/api/v1/`)
 - `POST /conversations/{id}/tracking-link`
 - `GET /conversations/{id}/tracking-links`
 - `GET /track/{token}` (público, redirige)
-- Ver sección 13 para flujo completo y Tracking 2.0 planeado.
 
 ### Admin (`/api/v1/admin/`)
 - `GET /stats/overview`
-- `GET /businesses?page&search&limit` → `{ items, total, page, limit }`
-- `GET /businesses/{id}` → mismo shape que un item de la lista
-- `PATCH /businesses/{id}/features` — recibe `Record<string, boolean>`
+- `GET /businesses?page=&search=&limit=`
+- `GET /businesses/{id}`
+- `PATCH /businesses/{id}/features`
 - `PATCH /businesses/{id}/plan`
 - Requiere: JWT + email == SUPERADMIN_EMAIL
 
@@ -214,18 +262,20 @@ max_conversations_per_month: int
 
 | Sección | Path | Estado |
 |---|---|---|
-| Login | `/auth/login` | ✅ |
-| Dashboard overview | `/dashboard` | ✅ |
-| Conversaciones | `/dashboard/conversations` | ✅ con panel de tracking links integrado |
-| Contactos | `/dashboard/contacts` | ✅ |
-| Leads / Pipeline | `/dashboard/leads` | ✅ |
+| Login | `/auth/login` | ✅ Claude Design |
+| Register | `/auth/register` | ✅ Claude Design |
+| Reset Password | `/auth/reset` | ✅ Claude Design |
+| Dashboard overview | `/dashboard` | ✅ funcional, rediseño pendiente |
+| Conversaciones | `/dashboard/conversations` | ✅ Claude Design |
+| Contactos | `/dashboard/contacts` | ✅ funcional, rediseño pendiente |
+| Leads / Pipeline | `/dashboard/leads` | ✅ funcional, rediseño pendiente |
 | Ecommerce / Productos | `/dashboard/ecommerce/productos` | ✅ |
 | Ecommerce / Órdenes | `/dashboard/ecommerce/orders` | ✅ |
 | Ecommerce / Cupones | `/dashboard/ecommerce/cupones` | ✅ |
-| Integraciones | `/dashboard/integrations` | ✅ |
-| Configuración | `/dashboard/settings` | ✅ |
+| Integraciones | `/dashboard/integrations` | ✅ funcional, rediseño pendiente |
+| Configuración | `/dashboard/settings` | ✅ funcional, rediseño pendiente |
 
-**Pendiente de rediseño completo con Claude Design** (P1 — ver TODO.md).
+**Pendiente rediseño completo con Claude Design (P1).**
 
 ---
 
@@ -234,31 +284,28 @@ max_conversations_per_month: int
 | Sección | Path | Estado |
 |---|---|---|
 | Login | `/auth/login` | ✅ funcional |
-| Dashboard stats | `/dashboard` | ✅ verificado |
-| Lista clientes | `/dashboard/clientes` | ✅ verificado |
-| Detalle cliente | `/dashboard/clientes/[id]` | ✅ verificado (edición plan/features funcional) |
+| Dashboard stats | `/dashboard` | ✅ MVP |
+| Lista clientes | `/dashboard/clientes` | ✅ MVP (smoke tested) |
+| Detalle cliente | `/dashboard/clientes/[id]` | ✅ MVP (smoke tested) |
 
-**Pendiente de rediseño con Claude Design** (P1 — ver TODO.md).
+**Pendiente rediseño completo con Claude Design (P1).**
 
 ---
 
 ## 11. Integraciones de Catálogo
 
-| Integración | Tipo | Estado | URL de producto |
-|---|---|---|---|
-| Jumpseller | Pull (API) | ✅ Funcionando — Pace Coffee 15 productos | `{shop_domain}/products/{permalink}` |
-| Bsale | Pull (API) | ✅ Funcionando — 161 productos (límite 500) | ❌ No tiene tienda pública (ERP) |
-| WooCommerce | Push (plugin WordPress) | ✅ Plugin instalado en MP Cars + clínica | `get_permalink($id)` |
-| Shopify | Pull (API) | ✅ Implementado, sin cliente activo | `{shop_domain}/products/{handle}` |
-| MercadoLibre | Pull (API) | ✅ Implementado, sin cliente activo | `permalink` del API |
+| Integración | Tipo | Estado |
+|---|---|---|
+| Jumpseller | Pull (API, auto-detect URL prefix) | ✅ Implementado |
+| Bsale | Pull (API) | ✅ Implementado (límite 500) |
+| WooCommerce | Push (plugin WordPress) | ✅ Plugin v1.1.0 |
+| Shopify | Pull (API) | ✅ Implementado, sin cliente activo |
+| MercadoLibre | Pull (API) | ✅ Implementado, sin cliente activo |
 
-### Plugin WordPress (`ventatalk`)
+### Plugin WordPress (`ventatalk` v1.1.0)
 - Path en repo: `scripts/wordpress-plugin/ventatalk/`
-- Versión actual: **v1.1.0**
 - Funciones: widget WhatsApp, sync manual catálogo, sync automático en tiempo real (hooks WooCommerce)
 - Configuración: token API + URL servidor en WordPress admin
-- **Planeado v1.2.0:** agregar `product_url` al payload de productos (Tracking 2.0 Fase 2a)
-- **Planeado v1.3.0:** registro de conversiones (Tracking 2.0 Fase 4a)
 
 ---
 
@@ -270,66 +317,40 @@ max_conversations_per_month: int
 | Reset conversaciones | Día 1 de cada mes 00:05 UTC | Resetea `conversations_this_month` |
 | Embeddings WooCommerce | Background tras ingest | Genera embeddings para productos nuevos |
 
+### Volumes Docker (producción)
+- `postgres_data` → DB
+- `redis_data` → Redis persistence
+- `celery_beat_data` → `/celery` (schedule file + pidfile, requerido por USER non-root)
+
 ---
 
-## 13. Tracking de Conversiones
+## 13. Tracking 2.0 — Arquitectura (en progreso)
 
-### Estado actual (Tracking 1.0)
+### Objetivo
+Reemplazar URLs públicas `api.ventatalk.com/track/{token}` por URLs nativas del cliente `{shop_domain}/products/{slug}?vt_conv={token}` para mejor UX y branding.
 
-**Flujo:**
-1. Agente humano abre conversación en `/dashboard/conversations`, le da al botón "Links".
-2. Llena modal con `destination_url` (URL manual) y `label` opcional.
-3. Frontend llama `POST /api/v1/conversations/{id}/tracking-link`.
-4. Backend genera token, crea registro en `conversion_tokens`, devuelve `tracking_url = https://api.ventatalk.com/track/{token}`.
-5. Agente copia el link al portapapeles, lo pega en su respuesta de WhatsApp.
-6. Lead hace click → `GET /track/{token}` → backend marca click, redirige al `destination_url`.
-7. Conversión se marca manualmente o vía webhook futuro (no implementado aún).
+### Fases
+- **Fase 1 ✅** — Campo `product_url` en catalog_items (migración 008)
+- **Fase 2a ✅** — Jumpseller backfill (fetch individual `permalink` por producto)
+- **Fase 2a.1 ✅** — Auto-detect URL prefix Jumpseller (HEAD probe `/products/{slug}` vs `/{slug}`, cache en `business.integrations.jumpseller.url_prefix`)
+- **Fase 2b** — WooCommerce plugin v1.2.0 con `product_url` (push)
+- **Fase 2c** — Shopify backfill
+- **Fase 2d** — Bsale → NULL (no expone permalinks)
+- **Fase 2e** — MercadoLibre backfill
+- **Fase 3** — Nuevo endpoint `POST /conversations/{id}/tracking-link` con `catalog_item_id` que devuelve URL completa
+- **Fase 4** — Plugin WordPress v1.3.0 con conversion tracking + Pixel JS (script en página del cliente)
+- **Fase 5** — UI: column en catálogo (link visible), selector en conversaciones
+- **Fase 6** — Domain override por cliente (cuando usan dominio propio distinto al de la tienda)
 
-**Limitaciones actuales:**
-- El link expone `api.ventatalk.com` → mala UX para el lead, branding débil para el cliente, confianza baja en WhatsApp.
-- URLs de productos hay que copiarlas manualmente porque `CatalogItem` no tiene `product_url`.
-- La IA no genera links automáticamente.
-- No hay registro automático de conversiones (solo clicks).
-- Sin dashboard agregado de conversiones.
-
-### Tracking 2.0 — Diseño objetivo
-
-**Cambio fundamental:** el link público es la URL del cliente con `?vt_conv={token}` appendado, no un dominio de VentaTalk.
-
-**Ejemplo:**
+### Cache de configuración por business
 ```
-Antes: https://api.ventatalk.com/track/RLS7zbK71AedbQ-kZkxTSrWdYvnPJpKwv0VH6yH9hV0
-Después: https://pacecoffeeroasters.com/products/cafe-yirgacheffe?vt_conv=RLS7zbK71...
+business.integrations.jumpseller = {
+  shop_url: "https://pacecoffeeroasters.com",
+  url_prefix: "/products/",  # o "/" si la tienda no usa /products/
+  access_token: <encrypted>,
+  ...
+}
 ```
-
-**Componentes:**
-
-1. **Modelo:** `CatalogItem.product_url` (VARCHAR(500) NULL) — URL completa del producto en la tienda del cliente. Null para Bsale.
-
-2. **Backfill por conector** durante sync:
-   - WooCommerce: `get_permalink($id)` (plugin v1.2.0+)
-   - Jumpseller: `{shop_domain}/products/{permalink}`
-   - Shopify: `{shop_domain}/products/{handle}`
-   - MercadoLibre: `permalink` del API
-   - Bsale: `NULL` (documentado, sin tienda pública)
-
-3. **Endpoint actualizado:** `POST /conversations/{id}/tracking-link` acepta:
-   - `catalog_item_id` (preferido): backend resuelve `product_url` del item
-   - `destination_url` (fallback manual): edge case, agente quiere mandar link no-producto
-   - Si item no tiene `product_url` → error 400
-
-4. **Registro de conversiones — 3 modos que conviven:**
-   - **Plugin WordPress v1.3.0:** hook `woocommerce_thankyou`, lee cookie con token, llama `POST /track/{token}/conversion`.
-   - **Pixel JS** (`/static/vt-pixel.js`): detecta `?vt_conv=`, guarda en cookie 90 días, dispara en thank-you page del cliente.
-   - **Webhook de orden** (Jumpseller, Shopify): respaldo server-side, busca UTM/metadata de la orden.
-
-5. **Compatibilidad:** `/track/{token}` se mantiene como fallback redirect para clientes sin pixel/plugin (degrada elegantemente).
-
-6. **UI:**
-   - Catálogo: columna "URL" con badge "Sin URL — no trackeable" cuando aplica.
-   - Conversaciones: selector de producto del catálogo (dropdown searchable) reemplaza el input manual de URL.
-
-**Documentación granular de fases en TODO.md.**
 
 ---
 
@@ -343,34 +364,7 @@ Después: https://pacecoffeeroasters.com/products/cafe-yirgacheffe?vt_conv=RLS7z
 
 ---
 
-## 15. Pendientes Técnicos
-
-> Lista resumida. Detalle priorizado en `TODO.md`.
-
-### Críticos
-_(ninguno crítico al día de hoy)_
-
-### Alta prioridad
-- Tracking 2.0 (6 fases — ver sección 13 y TODO.md)
-- Rediseño completo `app.ventatalk.com` con Claude Design
-- Rediseño `admin.ventatalk.com` con Claude Design
-
-### Media prioridad
-- Dashboard de conversiones agregado (`/analytics/conversions`)
-- Módulo carritos abandonados
-- Módulo Reviews
-- IA genera tracking links automáticamente (depende de Tracking 2.0)
-- Órdenes y cupones para Jumpseller, Bsale, Shopify, MercadoLibre
-
-### Backlog
-- Canal Instagram DM
-- Módulo B2B / Cotizaciones
-- Campañas outbound (Pro+)
-- Bsale bulk price list
-
----
-
-## 16. Decisiones Técnicas Clave
+## 15. Decisiones Técnicas Clave
 
 | Decisión | Razón |
 |---|---|
@@ -383,8 +377,52 @@ _(ninguno crítico al día de hoy)_
 | Features por tenant en JSONB | Activar/desactivar módulos sin redesplegar |
 | SUPERADMIN_EMAIL en .env | Más simple y seguro que campo en DB para MVP |
 | `asyncpg enum casing bug` | Fix: `values_callable=lambda x: [e.value for e in x]` en todos los Enum columns |
-| `bcrypt==4.0.1` pinneado | Compatibilidad con passlib 1.7.4 |
+| `bcrypt` | Pin `bcrypt==4.0.1` |
 | `git stash` en deploy | Evita conflictos cuando se editan archivos directo en VPS |
-| `next build` corre `tsc` en TODO el repo | Los fixes de tipo deben ser end-to-end; no hay "commit parcial con errores pendientes" |
-| Tracking link usa dominio del cliente (Tracking 2.0) | UX, confianza del lead, branding. Mantenemos `/track/{token}` solo como fallback |
-| Bash interpola `$` en hashes bcrypt | Para reset de password en DB: usar `psql` interactivo, no `psql -c "..."` con doble quote |
+| `POSTGRES_USER=ventatalk` (rename desde `ventabot`) | Consistencia con nombre del proyecto, momento del rebuild |
+| **Containers non-root** | Defensa en profundidad — bug en Next.js no escala a root del host |
+| **Multi-stage Dockerfile en backend** | Sin gcc/-dev en runtime, ~50% menos peso |
+| **Volume `celery_beat_data`** | Schedule de beat persiste entre reinicios, container non-root puede escribir |
+| **Nginx 1 archivo por subdominio** | Modular; error en uno no tumba los otros |
+| **Deploy keys read-only por repo** | Compromiso del VPS no permite pushear código malicioso |
+| **Tracking 2.0 con URL nativa** | Mejor UX (cliente ve su propio dominio), mejor SEO |
+
+---
+
+## 16. Lecciones del hack de mayo 2026
+
+### Qué pasó
+VPS original suspendido por Donweb el 2026-05-13. Detectado binario malicioso `/g6mGrjY` corriendo como root + procesos zombie de cleanup. Vector de ataque: **CVE en Next.js 15.0.3** (RCE vulnerability).
+
+### Por qué fue posible
+1. **Next.js 15.0.3 sin parchar** (vector directo)
+2. **Containers Docker corriendo como root** (escalada al host)
+3. **Sin alertas automáticas de CVE** (no había Dependabot)
+
+### Qué cambió tras la reconstrucción
+1. Next.js actualizado a 15.5.18 en frontend principal
+2. Los 4 Dockerfiles con USER non-root
+3. Multi-stage en backend (sin gcc en runtime)
+4. SSH hardenizado (puerto custom, key-only, fail2ban)
+5. UFW + Donweb edge firewall (doble capa)
+6. Containers en stack separado del host
+
+### Qué falta para no repetirse
+- Dependabot/Renovate en los 3 repos
+- Monitoreo proactivo (UptimeRobot)
+- Backups automáticos a almacenamiento externo
+- Migrar `ventatalk-web` de Next 14 (rama no soportada) a 15
+- Resolver `npm audit` pendiente en frontend
+
+---
+
+## 17. Workflow Git (regla operativa)
+
+```
+LOCAL (edit + commit + push) → GitHub → VPS (git pull) → docker compose up --build
+```
+
+**NUNCA editar directo en VPS.** Si fuerza mayor lo requiere:
+1. `scp` el archivo a local
+2. Commit + push desde local
+3. En VPS: `git checkout -- archivos && git pull`
