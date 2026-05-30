@@ -1,7 +1,7 @@
 # VentaTalk — SPEC General del Proyecto
 
 > Documento de referencia técnica y de producto. Actualizar antes de iniciar cualquier desarrollo nuevo.
-> Última actualización: Mayo 2026 (post-reconstrucción VPS)
+> Última actualización: Mayo 2026 (post-reconstrucción VPS + migración arturodev.info)
 
 ---
 
@@ -426,3 +426,66 @@ LOCAL (edit + commit + push) → GitHub → VPS (git pull) → docker compose up
 1. `scp` el archivo a local
 2. Commit + push desde local
 3. En VPS: `git checkout -- archivos && git pull`
+
+---
+
+## 18. Portfolio arturodev.info — Infraestructura compartida en VPS VentaTalk
+
+El VPS de VentaTalk también aloja el portfolio personal `arturodev.info`. Convive sin conflictos usando puertos de host distintos.
+
+### Mapeo de puertos en el host (todos los servicios)
+
+| App | Puerto host | Puerto interno | Dominio |
+|---|---|---|---|
+| VentaTalk frontend | 3000 | 3000 | app.ventatalk.com |
+| VentaTalk landing | 3001 | 3000 | ventatalk.com |
+| VentaTalk admin | 3002 | 3000 | admin.ventatalk.com |
+| VentaTalk API | 8000 | 8000 | api.ventatalk.com |
+| **arturodev frontend** | **3010** | 3000 | arturodev.info |
+| **arturodev backend** | **4010** | 4000 | api.arturodev.info |
+
+### Containers corriendo (11 total)
+
+**VentaTalk (8):** ventatalk-api-1, ventatalk-worker-1, ventatalk-beat-1, ventatalk-frontend-1, ventatalk-web-web-1, ventatalk-admin-admin-1, ventatalk-db-1, ventatalk-redis-1
+
+**arturodev (3):** arturodev_frontend (:3010), arturodev_backend (:4010), arturodev_db (solo interno)
+
+### Nginx — server blocks activos (6 total)
+
+```
+/etc/nginx/sites-enabled/
+  ventatalk.com          → proxy :3001
+  app.ventatalk.com      → proxy :3000
+  api.ventatalk.com      → proxy :8000 (timeout 300s, body 50M)
+  admin.ventatalk.com    → proxy :3002 (X-Robots-Tag: noindex)
+  arturodev.info         → proxy :3010
+  api.arturodev.info     → proxy :4010
+```
+
+### SSL certificados activos
+
+| Cert | Dominios cubiertos | Expira |
+|---|---|---|
+| ventatalk.com | ventatalk.com, www, app, api, admin | 2026-08-13 |
+| arturodev.info | arturodev.info, www, api | 2026-08-26 |
+
+### Stack arturodev
+- Frontend: Next.js 16 standalone
+- Backend: Nest.js + Prisma ORM (PostgreSQL)
+- DB: `pgvector/pgvector:pg16` (evita Docker Hub rate limit, compatible con Postgres 16)
+- Repo: `github.com/Arturado/arturodev`
+
+### Deploy arturodev
+- Push a `main` → GitHub Actions (`appleboy/ssh-action`) → SSH al VPS puerto 5743
+- Script: `git reset --hard origin/main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build`
+- Deploy key: `~/.ssh/deploy_keys/arturodev_deploy` (privada en GitHub Secrets, pública en repo Deploy keys Y en VPS authorized_keys)
+
+### Schema Prisma (arturodev)
+Tablas: `Project`, `Post`, `Contact`, `User`, `Experience`, `Config`
+
+La migración inicial (`20260324083922_init`) solo creó `Project`, `Post`, `Contact`. Las tablas `User`, `Experience`, `Config` se agregaron después con migración manual `20260528142123_add_user_experience_config`.
+
+### Regla operativa arturodev
+- `.env.production` en `.gitignore` — nunca al repo
+- **Nunca `git clean -fd`** sin revisar con `git clean -n` primero — borra el `.env.production`
+- Migraciones Prisma: siempre crear en **local** (`npx prisma migrate dev`), commitear, pushear. Nunca dentro del container.

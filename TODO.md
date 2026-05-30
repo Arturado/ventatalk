@@ -1,7 +1,7 @@
 # VentaTalk — TODO Priorizado
 
 > Actualizar cuando se completa una tarea o cambia la prioridad.
-> Última actualización: Mayo 2026 (post-reconstrucción VPS)
+> Última actualización: Mayo 2026 (post-reconstrucción VPS + migración arturodev.info)
 
 ---
 
@@ -209,3 +209,19 @@
 - [x] Login funcional + dashboard stats + lista clientes + detalle (MVP)
 - [x] Smoke test end-to-end
 - [x] Fix tipos `Business` alineados con shape backend
+
+---
+
+## ✅ Completado — Migración arturodev.info al VPS (mayo 2026)
+
+- [x] Portfolio `arturodev.info` migrado al VPS de VentaTalk sin conflictos (puertos 3010/4010)
+- [x] `docker-compose.prod.yml` creado (frontend :3010, backend :4010, postgres sin exponer al host)
+- [x] GitHub Actions workflow migrado de PM2/NVM → Docker Compose
+- [x] Deploy key `arturodev_deploy` configurada (pub en GitHub repo + pub en VPS `authorized_keys`)
+- [x] SSL para `arturodev.info`, `www.arturodev.info`, `api.arturodev.info` (Certbot, expira 2026-08-26)
+- [x] Nginx server blocks activos para los 2 dominios
+- [x] Migración Prisma para tablas `User`, `Experience`, `Config` (faltaban en migración inicial)
+- [x] Migración failed (P3009) resuelta con UPDATE en `_prisma_migrations`
+- [x] Usuario admin creado en `hola@arturodev.info`
+- [x] GitHub Actions deploy automático funcionando
+- [x] Cloudflare DNS apuntando a `179.43.124.82`, proxy naranja activo, SSL mode Full

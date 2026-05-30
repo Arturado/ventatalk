@@ -1,7 +1,7 @@
 # VentaTalk — CONTEXT para Claude Code
 
 > Leer completo antes de hacer cualquier cambio.
-> Última actualización: Mayo 2026 (post-reconstrucción VPS)
+> Última actualización: Mayo 2026 (post-reconstrucción VPS + migración arturodev.info)
 
 ---
 
@@ -400,3 +400,68 @@ Si por urgencia se edita en VPS:
 - **Cualquier dependencia nueva**: revisar `npm audit` / `pip-audit` antes de mergear.
 - **Containers SIEMPRE non-root** en runtime. Si necesitas root para apt, hazlo en stage builder y discard en runtime.
 - **GitHub Deploy Keys** son read-only por diseño. NO marcar "Allow write access" para keys de VPS.
+
+---
+
+## Portfolio arturodev.info — Conviviendo en el mismo VPS
+
+### Stack
+- Frontend: Next.js 16 standalone, puerto host **3010** (interno 3000)
+- Backend: Nest.js + Prisma ORM, puerto host **4010** (interno 4000)
+- DB: PostgreSQL 16 (imagen `pgvector/pgvector:pg16` — ya cacheada en VPS, evita Docker Hub rate limit)
+- Repo: `github.com/Arturado/arturodev` (público)
+- Path en VPS: `/home/hanowar/arturodev/`
+
+### Archivos clave
+```
+arturodev/
+  docker-compose.prod.yml       ← prod (puertos 3010/4010, postgres sin exponer)
+  docker-compose.yml            ← dev local
+  frontend/Dockerfile           ← multi-stage con ARG/ENV para build-time vars
+  backend/Dockerfile            ← Nest.js + Prisma generate
+  .env.production               ← NO en repo, en VPS (/home/hanowar/arturodev/)
+  .github/workflows/deploy.yml  ← appleboy SSH → docker compose up --build
+```
+
+### Nginx
+```
+/etc/nginx/sites-available/arturodev.info      → proxy 127.0.0.1:3010
+/etc/nginx/sites-available/api.arturodev.info  → proxy 127.0.0.1:4010
+```
+
+### Comandos
+```bash
+cd ~/arturodev
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production logs backend --tail=30
+docker compose -f docker-compose.prod.yml --env-file .env.production exec postgres psql -U arturodev_user -d arturodev
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend npx prisma migrate deploy
+```
+
+### GitHub Actions deploy
+- Secrets: `SERVER_HOST=179.43.124.82`, `SERVER_USER=hanowar`, `SERVER_PORT=5743`, `SERVER_SSH_KEY=arturodev_deploy privada`
+- La misma key sirve para dos cosas: `.pub` en GitHub Deploy keys (VPS clona repo) + `.pub` en `~/.ssh/authorized_keys` del VPS (GitHub Actions SSHea al VPS)
+
+---
+
+## Errores aprendidos — arturodev (mayo 2026)
+
+**10. Docker Hub rate limit** → usar imagen ya cacheada en VPS. Usar `pgvector/pgvector:pg16` en vez de `postgres:16`.
+
+**11. Next.js build-time env vars** → `env_file` pasa vars al container en runtime, NO durante `docker build`. Para vars que Next.js necesita en build (ej. `RESEND_API_KEY` instanciada en route handler), usar `build.args` en compose + `ARG`/`ENV` en Dockerfile antes del `RUN npm run build`.
+
+**12. Deploy key — doble registro** → la misma key ed25519 necesita estar en dos lugares: `.pub` en GitHub repo → Settings → Deploy keys (para que VPS clone), y `.pub` en `~/.ssh/authorized_keys` del VPS (para que GitHub Actions pueda SSH). Si falta alguno, falla con `unable to authenticate`.
+
+**13. `git clean -fd` borra `.env.production`** → archivos untracked (`.env.production` en `.gitignore`) son eliminados por `git clean -fd`. Antes de correrlo, siempre revisar con `git clean -n`. Nunca usar `-fd` en repos de producción sin revisar.
+
+**14. Cloudflare proxy naranja + Certbot HTTP-01** → con proxy naranja activo, el challenge HTTP-01 de Let's Encrypt falla porque Cloudflare intercepta el request antes de llegar al VPS. Solución: poner grey cloud temporalmente → generar cert → volver a naranja. Con cert válido en VPS, configurar SSL mode en "Full" o "Full (strict)" en Cloudflare (no "Flexible" — causa redirect loops).
+
+**15. Cloudflare 502 ≠ CORS** → si el backend da 502 desde Cloudflare, no es problema de CORS headers sino que el backend no está respondiendo. Diagnosticar con `curl http://localhost:PUERTO` desde el VPS antes de asumir que es un problema de headers.
+
+**16. Prisma `migrate dev` dentro del container no persiste** → genera archivos de migración dentro del filesystem del container, pero el Dockerfile hace `COPY . .` — es copia unidireccional en build time. La migración se aplica a la DB pero el archivo `.sql` desaparece al recrear el container. Siempre crear migraciones en **local** y commitearlas al repo.
+
+**17. Prisma P3009 — migración failed** → si una migración queda en estado `failed` en `_prisma_migrations` (porque las tablas ya existían), Prisma bloquea todos los deploys siguientes. Fix:
+```sql
+UPDATE _prisma_migrations SET finished_at = NOW(), logs = NULL
+WHERE migration_name = 'NOMBRE_MIGRACION';
+```
