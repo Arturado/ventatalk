@@ -2,12 +2,12 @@ services:
   # ── Base de datos principal ──────────────────────────────────────
   db:
     image: pgvector/pgvector:pg16
-    container_name: ventabot_db
+    container_name: ventatalk_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ventabot}
+      POSTGRES_USER: ${POSTGRES_USER:-ventatalk}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ventabot_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-ventabot_db}
+      POSTGRES_DB: ${POSTGRES_DB:-ventatalk_db}
     ports:
       - "5432:5432"
     volumes:
@@ -22,7 +22,7 @@ services:
   # ── Redis (cache + queue) ────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: ventabot_redis
+    container_name: ventatalk_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -39,7 +39,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ventabot_api
+    container_name: ventatalk_api
     restart: unless-stopped
     env_file: .env.development
     ports:
@@ -58,7 +58,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ventabot_worker
+    container_name: ventatalk_worker
     restart: unless-stopped
     env_file: .env.development
     volumes:
@@ -75,7 +75,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: ventabot_beat
+    container_name: ventatalk_beat
     restart: unless-stopped
     env_file: .env.development
     volumes:
@@ -88,10 +88,12 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ventabot_frontend
+      dockerfile: Dockerfile.dev
+    container_name: ventatalk_frontend
     restart: unless-stopped
     env_file: .env.development
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     ports:
       - "3000:3000"
     volumes:
