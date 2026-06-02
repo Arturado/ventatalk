@@ -34,3 +34,5 @@ Thumbs.db
 .claude/
 backend/celerybeat-schedule
 scripts/wordpress-plugin/*.zip
+.env.local
+.env.*.local
