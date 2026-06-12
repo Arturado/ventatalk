@@ -1,5 +1,5 @@
 # Stage 1: builder — compila wheels de dependencias
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: runtime — solo lo esencial
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 
