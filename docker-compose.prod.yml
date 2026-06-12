@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,7 +43,7 @@ services:
 
   beat:
     build: ./backend
-    command: celery -A app.workers.celery_app beat --loglevel=info --schedule=/celery/celerybeat-schedule --pidfile=/celery/celerybeat.pid
+    command: sh -c "rm -f /celery/celerybeat.pid && celery -A app.workers.celery_app beat --loglevel=info --schedule=/celery/celerybeat-schedule --pidfile=/celery/celerybeat.pid"
     restart: always
     env_file: .env.production
     volumes:
