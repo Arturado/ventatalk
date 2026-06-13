@@ -56,6 +56,8 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID}
+        NEXT_PUBLIC_META_CONFIG_ID: ${META_CONFIG_ID}
     restart: always
     env_file: .env.production
     ports:

@@ -14,12 +14,17 @@
 - [x] Configurar Stripe Webhook en panel — endpoint + 3 eventos creados
   - [ ] **Falta confirmar:** restart de api+worker+beat tras agregar `STRIPE_WEBHOOK_SECRET` (valor ya está correcto en `.env.production`)
 
-- [ ] **WhatsApp multi-cliente — Embedded Signup / Tech Provider** ⚠️ NUEVO, BLOCKER
-  - Hoy el sandbox solo soporta 1 WABA (el de prueba de VentaTalk). Para que un cliente real (MP Cars, clínica, Pace Coffee) reciba mensajes vía VentaTalk, necesita su propio número de WhatsApp Business conectado a la App de Meta de VentaTalk
-  - Requiere flujo "Convertirte en proveedor de tecnología" (Embedded Signup) en Meta for Developers
-  - Backend: `webhook.py` debe enrutar mensajes entrantes por `phone_number_id` → `business_id` (actualmente asume 1 solo número)
-  - Modelo `PhoneNumber` ya existe (multi-tenant por diseño) — falta el flujo de conexión + routing
-  - **Sin esto, "Re-onboarding clientes piloto" no tiene sentido completo**: pueden tener catálogo sincronizado pero no recibir WhatsApp real
+- [x] **WhatsApp multi-cliente — Embedded Signup implementado** ✅ (Junio 2026)
+  - Backend: `POST /api/v1/integrations/whatsapp/connect` — intercambia code → token Meta, obtiene WABA + phone numbers, suscribe webhooks, upsert en `phone_numbers`
+  - Backend: `GET /api/v1/integrations/whatsapp/status` + `DELETE /api/v1/integrations/whatsapp/{id}`
+  - Frontend: card "WhatsApp Business" en `/dashboard/integrations` con FB SDK Embedded Signup (postMessage + FB.login)
+  - Vars: `META_APP_ID`, `META_CONFIG_ID` en backend; `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_CONFIG_ID` como build args en Dockerfile/docker-compose.prod.yml
+  - [ ] **Pendiente configuración en Meta** (hace el operador, no Claude):
+    - Facebook Login for Business → Allowed Domains: `https://app.ventatalk.com`
+    - Crear Configuración con permisos `whatsapp_business_management`, `whatsapp_business_messaging`, `business_management` → guardar `META_CONFIG_ID`
+    - Iniciar Business Verification + App Review (Advanced Access) en Meta
+    - App debe estar en modo **Live** para externos (hoy: Development)
+  - [ ] **Testing end-to-end**: completar flujo desde `app.ventatalk.com`, verificar fila en `phone_numbers`, probar mensajería
 
 - [x] **Regenerar tokens Meta WhatsApp (sandbox)** — ✅ completado
   - System User permanente creado (`ventatalk-sandbox-bot`), token no expira

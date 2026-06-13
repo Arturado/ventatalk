@@ -1,12 +1,14 @@
 """
 Endpoint para gestionar integraciones de catálogo externas.
-Jumpseller, Bsale, WooCommerce (inbound). Próximamente: Shopify.
+Jumpseller, Bsale, WooCommerce (inbound). Shopify, MercadoLibre.
+WhatsApp Embedded Signup: conecta números de WhatsApp Business a la cuenta del tenant.
 
 Seguridad:
   - Tokens de salida (Jumpseller/Bsale) encriptados con Fernet antes de guardar en DB
   - Token de entrada WooCommerce guardado como SHA-256 hash — nunca en texto plano
   - Frontend nunca recibe tokens completos — solo últimos 8 chars enmascarados
   - Desencriptación solo en background tasks para llamadas a APIs externas
+  - WhatsApp access_token guardado en texto plano (igual que el sandbox de VentaTalk)
 """
 import hashlib
 import logging
@@ -14,16 +16,18 @@ import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.encryption import decrypt_token, encrypt_token, mask_token
 from app.core.security import get_current_business
-from app.models.models import Business, CatalogItem, Coupon, Order
+from app.models.models import Business, CatalogItem, Coupon, Order, PhoneNumber
 from app.services.integrations.jumpseller import JumpsellerService
 from app.services.integrations.bsale import BsaleService
 from app.services.integrations.shopify import ShopifyService
@@ -873,6 +877,251 @@ async def revoke_woocommerce_token(
         business.integrations.pop("woocommerce", None)
         flag_modified(business, "integrations")
     await db.commit()
+
+
+# ── WHATSAPP EMBEDDED SIGNUP ──────────────────────────────────────────
+#
+# Nota técnica — mecanismo de intercambio de code → token (v25.0):
+#
+# El JS SDK de Facebook con response_type='code' devuelve un código de
+# autorización (OAuth 2.0 Authorization Code flow). Este se intercambia con:
+#   GET /oauth/access_token?client_id=APP_ID&client_secret=APP_SECRET&code=CODE
+# (sin redirect_uri para el flow de popup/JS SDK — Meta lo permite).
+# El token resultante es un User Access Token de corta duración (~60 días).
+# Para flujos de producción con Embedded Signup y featureType=
+# 'whatsapp_business_app_onboarding', Meta puede emitir un System User Token
+# de larga duración (nunca expira). Por ahora almacenamos lo que devuelve sin
+# exchange adicional; si en producción se confirma que expira, agregar:
+#   GET /oauth/access_token?grant_type=fb_exchange_token&fb_exchange_token=SHORT_TOKEN
+# para obtener un long-lived token antes de guardar.
+
+
+class WhatsAppConnectRequest(BaseModel):
+    code: str
+    waba_id: Optional[str] = None  # capturado del evento postMessage WA_EMBEDDED_SIGNUP
+
+
+class WhatsAppConnectResponse(BaseModel):
+    connected: bool
+    phone_number: str
+    display_name: str
+    phone_number_id: str
+
+
+class WhatsAppPhoneOut(BaseModel):
+    phone_number_id: str
+    phone_number: str
+    display_name: str
+    waba_id: str
+    is_active: bool
+
+
+async def _resolve_waba_id(access_token: str, graph_base: str) -> str:
+    """Fallback: busca el WABA ID del usuario via GET /me/businesses."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.get(
+            f"{graph_base}/me/businesses",
+            params={
+                "access_token": access_token,
+                "fields": "owned_whatsapp_business_accounts{id}",
+            },
+        )
+    if res.status_code != 200:
+        raise HTTPException(
+            502,
+            f"No se pudo obtener el WABA ID desde Meta ({res.status_code}). "
+            "Intenta de nuevo y asegúrate de completar el flujo de Embedded Signup.",
+        )
+    data = res.json()
+    for biz in data.get("data", []):
+        wabas = biz.get("owned_whatsapp_business_accounts", {}).get("data", [])
+        if wabas:
+            return wabas[0]["id"]
+    raise HTTPException(
+        400,
+        "No se encontró ninguna cuenta de WhatsApp Business asociada. "
+        "Asegúrate de completar el flujo de conexión en el popup.",
+    )
+
+
+@router.post("/whatsapp/connect", response_model=WhatsAppConnectResponse)
+async def connect_whatsapp(
+    body: WhatsAppConnectRequest,
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Conecta un número de WhatsApp Business al tenant via Embedded Signup.
+    Recibe el code del FB.login, intercambia por token, obtiene WABA + número,
+    suscribe webhooks, y hace upsert en phone_numbers.
+    """
+    settings = get_settings()
+    graph_base = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}"
+
+    if not settings.META_APP_ID or not settings.META_APP_SECRET:
+        raise HTTPException(500, "META_APP_ID o META_APP_SECRET no configurados.")
+
+    # 1. Intercambiar code por access_token
+    async with httpx.AsyncClient(timeout=30) as client:
+        token_res = await client.get(
+            f"{graph_base}/oauth/access_token",
+            params={
+                "client_id": settings.META_APP_ID,
+                "client_secret": settings.META_APP_SECRET,
+                "code": body.code,
+            },
+        )
+    if token_res.status_code != 200:
+        logger.error(f"Meta token exchange failed: {token_res.text}")
+        raise HTTPException(
+            400,
+            f"Error al verificar la autorización con Meta ({token_res.status_code}). "
+            "El código puede haber expirado — intenta reconectar.",
+        )
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(400, f"Meta no devolvió access_token: {token_data}")
+
+    # 2. Obtener WABA ID (del postMessage del frontend o vía Graph API fallback)
+    waba_id = body.waba_id
+    if not waba_id:
+        logger.info("waba_id no recibido del frontend — buscando vía Graph API")
+        waba_id = await _resolve_waba_id(access_token, graph_base)
+
+    # 3. Obtener phone_numbers del WABA
+    async with httpx.AsyncClient(timeout=30) as client:
+        phones_res = await client.get(
+            f"{graph_base}/{waba_id}/phone_numbers",
+            params={"access_token": access_token},
+        )
+    if phones_res.status_code != 200:
+        logger.error(f"phone_numbers lookup failed for WABA {waba_id}: {phones_res.text}")
+        raise HTTPException(
+            502,
+            "No se pudieron obtener los números de teléfono del WABA. "
+            "Verifica que la app tenga permisos whatsapp_business_management.",
+        )
+    phones_data = phones_res.json()
+    phone_list = phones_data.get("data", [])
+    if not phone_list:
+        raise HTTPException(400, "No hay números de teléfono en esta cuenta de WhatsApp Business.")
+
+    # MVP: tomar el primer número disponible
+    phone_info = phone_list[0]
+    phone_number_id = phone_info["id"]
+    phone_number = phone_info.get("display_phone_number", "")
+    display_name = phone_info.get("verified_name", phone_info.get("display_phone_number", ""))
+
+    # 4. Verificar límite del plan (solo si es número nuevo)
+    existing_result = await db.execute(
+        select(PhoneNumber).where(PhoneNumber.phone_number_id == phone_number_id)
+    )
+    existing_phone = existing_result.scalar_one_or_none()
+    if not existing_phone:
+        count_result = await db.execute(
+            select(PhoneNumber).where(
+                PhoneNumber.business_id == business.id,
+                PhoneNumber.is_active == True,
+            )
+        )
+        if len(count_result.scalars().all()) >= business.max_phone_numbers:
+            raise HTTPException(
+                403,
+                f"Tu plan permite máximo {business.max_phone_numbers} número(s) activo(s). "
+                "Desconecta uno existente o actualiza tu plan.",
+            )
+    elif str(existing_phone.business_id) != str(business.id):
+        # El número ya está registrado en otro tenant
+        raise HTTPException(409, "Este número ya está conectado a otra cuenta de VentaTalk.")
+
+    # 5. Suscribir la app a los webhooks del WABA
+    async with httpx.AsyncClient(timeout=30) as client:
+        sub_res = await client.post(
+            f"{graph_base}/{waba_id}/subscribed_apps",
+            params={"access_token": access_token},
+        )
+    if sub_res.status_code != 200:
+        logger.warning(
+            f"Webhook subscription failed para WABA {waba_id} "
+            f"(status {sub_res.status_code}): {sub_res.text}"
+        )
+
+    # 6. Upsert en phone_numbers
+    if existing_phone:
+        existing_phone.business_id = business.id
+        existing_phone.phone_number = phone_number
+        existing_phone.display_name = display_name
+        existing_phone.access_token = access_token
+        existing_phone.waba_id = waba_id
+        existing_phone.is_active = True
+    else:
+        db.add(PhoneNumber(
+            business_id=business.id,
+            phone_number_id=phone_number_id,
+            phone_number=phone_number,
+            display_name=display_name,
+            access_token=access_token,
+            waba_id=waba_id,
+            is_active=True,
+        ))
+    await db.commit()
+
+    logger.info(
+        f"WhatsApp conectado: business={business.id}, "
+        f"phone={phone_number}, waba={waba_id}"
+    )
+    return WhatsAppConnectResponse(
+        connected=True,
+        phone_number=phone_number,
+        display_name=display_name,
+        phone_number_id=phone_number_id,
+    )
+
+
+@router.get("/whatsapp/status", response_model=list[WhatsAppPhoneOut])
+async def whatsapp_status(
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """Devuelve los números de WhatsApp activos del business (sin exponer access_token)."""
+    result = await db.execute(
+        select(PhoneNumber).where(
+            PhoneNumber.business_id == business.id,
+            PhoneNumber.is_active == True,
+        )
+    )
+    return [
+        WhatsAppPhoneOut(
+            phone_number_id=p.phone_number_id,
+            phone_number=p.phone_number,
+            display_name=p.display_name,
+            waba_id=p.waba_id,
+            is_active=p.is_active,
+        )
+        for p in result.scalars().all()
+    ]
+
+
+@router.delete("/whatsapp/{phone_number_id}", status_code=204)
+async def disconnect_whatsapp(
+    phone_number_id: str,
+    business: Business = Depends(get_current_business),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete del número (is_active=false). Preserva historial de conversaciones."""
+    result = await db.execute(
+        select(PhoneNumber).where(
+            PhoneNumber.phone_number_id == phone_number_id,
+            PhoneNumber.business_id == business.id,
+        )
+    )
+    phone = result.scalar_one_or_none()
+    if not phone:
+        raise HTTPException(404, "Número no encontrado o no pertenece a este negocio.")
+    phone.is_active = False
+    await db.commit()
+    logger.info(f"WhatsApp desconectado: phone_number_id={phone_number_id}, business={business.id}")
 
 
 # ── Background tasks ──────────────────────────────────────────────────

@@ -1,13 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
-import api, { integrationsApi } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import api, { integrationsApi, WhatsAppPhone } from "@/lib/api";
 import {
   Database, ShoppingBag, FileSpreadsheet, RefreshCw,
   CheckCircle2, XCircle, Link, Loader2, Key, Edit2,
   Copy, RotateCcw, Globe, AlertTriangle, Eye, EyeOff,
+  MessageCircle, PhoneOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/components/ui/PageHeader";
+
+declare global {
+  interface Window {
+    FB: {
+      init: (opts: Record<string, unknown>) => void;
+      login: (callback: (res: { authResponse?: { code?: string } }) => void, opts: Record<string, unknown>) => void;
+    };
+    fbAsyncInit?: () => void;
+  }
+}
 
 interface IntegrationStatus {
   provider: string;
@@ -38,6 +49,13 @@ export default function IntegrationsPage() {
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
+
+  // WhatsApp Embedded Signup
+  const [waPhones, setWaPhones] = useState<WhatsAppPhone[]>([]);
+  const [waConnecting, setWaConnecting] = useState(false);
+  const [waDisconnecting, setWaDisconnecting] = useState<string | null>(null);
+  const wabaIdRef = useRef<string | null>(null);
+  const fbSdkLoaded = useRef(false);
 
   // Shopify
   const [sfShop, setSfShop] = useState("");
@@ -73,18 +91,20 @@ export default function IntegrationsPage() {
 
   const loadStatus = async () => {
     try {
-      const [jsRes, bsRes, sfRes, mlRes, wooRes] = await Promise.all([
+      const [jsRes, bsRes, sfRes, mlRes, wooRes, waRes] = await Promise.all([
         api.get("/api/v1/integrations/jumpseller/status"),
         api.get("/api/v1/integrations/bsale/status"),
         api.get("/api/v1/integrations/shopify/status"),
         api.get("/api/v1/integrations/mercadolibre/status"),
         integrationsApi.woocommerce.status(),
+        integrationsApi.whatsapp.status(),
       ]);
       setJumpseller(jsRes.data);
       setBsale(bsRes.data);
       setShopify(sfRes.data);
       setMl(mlRes.data);
       setWoo(wooRes.data);
+      setWaPhones(waRes.data);
       if (bsRes.data.connected) {
         try {
           const pl = await api.get("/api/v1/integrations/bsale/price-lists");
@@ -95,7 +115,91 @@ export default function IntegrationsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { loadStatus(); }, []);
+  // Carga el FB SDK una sola vez y registra el listener de postMessage
+  const initFbSdk = useCallback(() => {
+    if (fbSdkLoaded.current || !process.env.NEXT_PUBLIC_META_APP_ID) return;
+    fbSdkLoaded.current = true;
+
+    // Listener para capturar waba_id del evento WA_EMBEDDED_SIGNUP
+    window.addEventListener("message", (e: MessageEvent) => {
+      if (typeof e.data !== "string") return;
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.event === "FINISH") {
+          wabaIdRef.current = data?.data?.waba_id ?? null;
+        }
+      } catch {}
+    });
+
+    window.fbAsyncInit = () => {
+      window.FB.init({
+        appId: process.env.NEXT_PUBLIC_META_APP_ID,
+        cookie: true,
+        xfbml: false,
+        version: "v25.0",
+      });
+    };
+
+    const script = document.createElement("script");
+    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = "anonymous";
+    document.body.appendChild(script);
+  }, []);
+
+  const openWhatsAppSignup = () => {
+    if (!window.FB) {
+      toast.error("El SDK de Facebook aún está cargando. Intenta de nuevo en un momento.");
+      return;
+    }
+    wabaIdRef.current = null;
+    window.FB.login(
+      async (response) => {
+        const code = response.authResponse?.code;
+        if (!code) return;
+        setWaConnecting(true);
+        try {
+          const res = await integrationsApi.whatsapp.connect(code, wabaIdRef.current);
+          toast.success(`WhatsApp conectado: ${res.data.phone_number}`);
+          await loadStatus();
+        } catch (err: any) {
+          toast.error(err.response?.data?.detail || "Error conectando WhatsApp");
+        } finally {
+          setWaConnecting(false);
+        }
+      },
+      {
+        config_id: process.env.NEXT_PUBLIC_META_CONFIG_ID,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          sessionInfoVersion: 3,
+          featureType: "whatsapp_business_app_onboarding",
+        },
+      },
+    );
+  };
+
+  const disconnectWhatsApp = async (phone_number_id: string, phone_number: string) => {
+    if (!confirm(`¿Desconectar ${phone_number}? Los mensajes existentes se mantienen, pero este número ya no recibirá nuevos mensajes.`)) return;
+    setWaDisconnecting(phone_number_id);
+    try {
+      await integrationsApi.whatsapp.disconnect(phone_number_id);
+      toast.success("Número desconectado");
+      setWaPhones((prev) => prev.filter((p) => p.phone_number_id !== phone_number_id));
+    } catch {
+      toast.error("Error desconectando el número");
+    } finally {
+      setWaDisconnecting(null);
+    }
+  };
+
+  useEffect(() => {
+    loadStatus();
+    initFbSdk();
+  }, [initFbSdk]);
 
   const connectJumpseller = async () => {
     if (!jsLogin || !jsToken) return toast.error("Completa login y token");
@@ -835,6 +939,84 @@ export default function IntegrationsPage() {
               </button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* ── WhatsApp Business ──────────────────────────── */}
+      <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-green-100 dark:bg-green-900/40 rounded-xl flex items-center justify-center">
+              <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] fill-green-600 dark:fill-green-400" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">WhatsApp Business</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {waPhones.length > 0
+                  ? waPhones.map((p) => p.phone_number).join(", ")
+                  : "No conectado"}
+              </p>
+            </div>
+          </div>
+          <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full ${
+            waPhones.length > 0
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+              : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+          }`}>
+            {waPhones.length > 0
+              ? <><CheckCircle2 className="w-3.5 h-3.5" /> Conectado</>
+              : <><XCircle className="w-3.5 h-3.5" /> Desconectado</>}
+          </span>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Números conectados */}
+          {waPhones.map((phone) => (
+            <div key={phone.phone_number_id} className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-600">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{phone.display_name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{phone.phone_number}</p>
+              </div>
+              <button
+                onClick={() => disconnectWhatsApp(phone.phone_number_id, phone.phone_number)}
+                disabled={waDisconnecting === phone.phone_number_id}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 dark:border-slate-600 text-gray-500 dark:text-slate-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800 transition-colors cursor-pointer font-medium disabled:opacity-50"
+              >
+                {waDisconnecting === phone.phone_number_id
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <PhoneOff className="w-3.5 h-3.5" />}
+                Desconectar
+              </button>
+            </div>
+          ))}
+
+          {/* Instrucciones y botón de conexión */}
+          <div className="bg-slate-50 dark:bg-slate-700/40 rounded-xl p-4 space-y-2.5 border border-slate-100 dark:border-slate-600">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              <MessageCircle className="w-3.5 h-3.5" />
+              Cómo conectar tu número de WhatsApp Business
+            </p>
+            <ol className="text-xs text-gray-500 dark:text-slate-400 space-y-1.5 list-none">
+              <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center font-bold text-[10px]">1</span>Haz clic en "Conectar WhatsApp" — se abrirá un popup de Meta</li>
+              <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center font-bold text-[10px]">2</span>Sigue los pasos: selecciona o crea tu cuenta de WhatsApp Business</li>
+              <li className="flex gap-2"><span className="flex-shrink-0 w-4 h-4 bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center font-bold text-[10px]">3</span>Autoriza los permisos solicitados — el número se conecta automáticamente</li>
+            </ol>
+          </div>
+
+          <button
+            onClick={openWhatsAppSignup}
+            disabled={waConnecting}
+            className="flex w-full items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors cursor-pointer shadow-sm"
+          >
+            {waConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+              </svg>
+            )}
+            {waConnecting ? "Conectando..." : waPhones.length > 0 ? "Conectar otro número" : "Conectar WhatsApp"}
+          </button>
         </div>
       </section>
 

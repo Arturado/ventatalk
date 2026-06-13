@@ -160,7 +160,25 @@ export const integrationsApi = {
     generateToken: () => api.post<{ token: string; hint: string }>("/api/v1/integrations/woocommerce/token"),
     revokeToken:   () => api.delete("/api/v1/integrations/woocommerce/token"),
   },
+  whatsapp: {
+    status:     () => api.get<WhatsAppPhone[]>("/api/v1/integrations/whatsapp/status"),
+    connect:    (code: string, waba_id?: string | null) =>
+      api.post<{ connected: boolean; phone_number: string; display_name: string; phone_number_id: string }>(
+        "/api/v1/integrations/whatsapp/connect",
+        { code, waba_id },
+      ),
+    disconnect: (phone_number_id: string) =>
+      api.delete(`/api/v1/integrations/whatsapp/${phone_number_id}`),
+  },
 };
+
+export interface WhatsAppPhone {
+  phone_number_id: string;
+  phone_number: string;
+  display_name: string;
+  waba_id: string;
+  is_active: boolean;
+}
 
 // ─── Phone Numbers ─────────────────────────────────────────────────────────────
 

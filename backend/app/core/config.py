@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # Meta WhatsApp
     META_VERIFY_TOKEN: str
     META_APP_SECRET: str
+    META_APP_ID: str = ""
+    META_CONFIG_ID: str = ""
     WHATSAPP_API_VERSION: str = "v19.0"
 
     # API pública
