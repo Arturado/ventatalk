@@ -148,6 +148,21 @@ export default function IntegrationsPage() {
     document.body.appendChild(script);
   }, []);
 
+  const handleWhatsAppSignupResponse = async (response: { authResponse?: { code?: string } }) => {
+    const code = response.authResponse?.code;
+    if (!code) return;
+    setWaConnecting(true);
+    try {
+      const res = await integrationsApi.whatsapp.connect(code, wabaIdRef.current);
+      toast.success(`WhatsApp conectado: ${res.data.phone_number}`);
+      await loadStatus();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Error conectando WhatsApp");
+    } finally {
+      setWaConnecting(false);
+    }
+  };
+
   const openWhatsAppSignup = () => {
     if (!window.FB) {
       toast.error("El SDK de Facebook aún está cargando. Intenta de nuevo en un momento.");
@@ -155,19 +170,8 @@ export default function IntegrationsPage() {
     }
     wabaIdRef.current = null;
     window.FB.login(
-      async (response) => {
-        const code = response.authResponse?.code;
-        if (!code) return;
-        setWaConnecting(true);
-        try {
-          const res = await integrationsApi.whatsapp.connect(code, wabaIdRef.current);
-          toast.success(`WhatsApp conectado: ${res.data.phone_number}`);
-          await loadStatus();
-        } catch (err: any) {
-          toast.error(err.response?.data?.detail || "Error conectando WhatsApp");
-        } finally {
-          setWaConnecting(false);
-        }
+      (response) => {
+        handleWhatsAppSignupResponse(response);
       },
       {
         config_id: process.env.NEXT_PUBLIC_META_CONFIG_ID,
