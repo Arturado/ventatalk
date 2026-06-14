@@ -163,16 +163,27 @@ class WooCommerceVerifyResponse(BaseModel):
     wordpress_site_url: Optional[str] = None
 
 
+def _normalize_site_url(url: str) -> str:
+    """Normaliza una URL de sitio WordPress para comparación robusta.
+    Quita protocolo, prefijo www., trailing slash y pasa a lowercase."""
+    url = url.strip().lower()
+    url = url.removeprefix("https://").removeprefix("http://")
+    if url.startswith("www."):
+        url = url[4:]
+    return url.rstrip("/")
+
+
 def _check_and_lock_site_url(wc_config: dict, incoming: Optional[str]) -> Optional[str]:
     """Returns 403 detail str if site_url mismatches locked domain, else None.
-    Mutates wc_config to set wordpress_site_url on first connection."""
+    Mutates wc_config to set wordpress_site_url (normalizada) on first connection."""
     if not incoming:
         return None
+    normalized_incoming = _normalize_site_url(incoming)
     locked = wc_config.get("wordpress_site_url")
     if not locked:
-        wc_config["wordpress_site_url"] = incoming.rstrip("/")
+        wc_config["wordpress_site_url"] = normalized_incoming
         return None
-    if locked.rstrip("/").lower() == incoming.rstrip("/").lower():
+    if _normalize_site_url(locked) == normalized_incoming:
         return None
     return (
         f"Este token está registrado para {locked}. "
