@@ -21,7 +21,7 @@ langchain==0.3.30
 langchain-openai==0.2.11
 langchain-community==0.3.31
 langchain-core==0.3.86
-langchain-text-splitters==0.3.11
+langchain-text-splitters==1.1.2
 tiktoken==0.8.0
 
 # ── Queue / Workers ──────────────────────────────────────────────────
