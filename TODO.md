@@ -14,17 +14,12 @@
 - [x] Configurar Stripe Webhook en panel — endpoint + 3 eventos creados
   - [ ] **Falta confirmar:** restart de api+worker+beat tras agregar `STRIPE_WEBHOOK_SECRET` (valor ya está correcto en `.env.production`)
 
-- [x] **WhatsApp multi-cliente — Embedded Signup implementado** ✅ (Junio 2026)
-  - Backend: `POST /api/v1/integrations/whatsapp/connect` — intercambia code → token Meta, obtiene WABA + phone numbers, suscribe webhooks, upsert en `phone_numbers`
-  - Backend: `GET /api/v1/integrations/whatsapp/status` + `DELETE /api/v1/integrations/whatsapp/{id}`
-  - Frontend: card "WhatsApp Business" en `/dashboard/integrations` con FB SDK Embedded Signup (postMessage + FB.login)
-  - Vars: `META_APP_ID`, `META_CONFIG_ID` en backend; `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_CONFIG_ID` como build args en Dockerfile/docker-compose.prod.yml
-  - [ ] **Pendiente configuración en Meta** (hace el operador, no Claude):
-    - Facebook Login for Business → Allowed Domains: `https://app.ventatalk.com`
-    - Crear Configuración con permisos `whatsapp_business_management`, `whatsapp_business_messaging`, `business_management` → guardar `META_CONFIG_ID`
-    - Iniciar Business Verification + App Review (Advanced Access) en Meta
-    - App debe estar en modo **Live** para externos (hoy: Development)
-  - [ ] **Testing end-to-end**: completar flujo desde `app.ventatalk.com`, verificar fila en `phone_numbers`, probar mensajería
+- [ ] **WhatsApp multi-cliente — Embedded Signup / Tech Provider** ⚠️ NUEVO, BLOCKER
+  - Hoy el sandbox solo soporta 1 WABA (el de prueba de VentaTalk). Para que un cliente real (MP Cars, clínica, Pace Coffee) reciba mensajes vía VentaTalk, necesita su propio número de WhatsApp Business conectado a la App de Meta de VentaTalk
+  - Requiere flujo "Convertirte en proveedor de tecnología" (Embedded Signup) en Meta for Developers
+  - Backend: `webhook.py` debe enrutar mensajes entrantes por `phone_number_id` → `business_id` (actualmente asume 1 solo número)
+  - Modelo `PhoneNumber` ya existe (multi-tenant por diseño) — falta el flujo de conexión + routing
+  - **Sin esto, "Re-onboarding clientes piloto" no tiene sentido completo**: pueden tener catálogo sincronizado pero no recibir WhatsApp real
 
 - [x] **Regenerar tokens Meta WhatsApp (sandbox)** — ✅ completado
   - System User permanente creado (`ventatalk-sandbox-bot`), token no expira
@@ -36,7 +31,7 @@
 - [ ] **Re-onboarding clientes piloto** (catálogo — independiente de WhatsApp, puede avanzar en paralelo)
   - **MP Cars** — desinstalado, requiere: mejorar plugin visualmente (v1.2.0) + reconectar (usuario, token, reimportar 539 productos/49 órdenes)
   - **Clínica cosmética** — WordPress: regenerar token, instalar plugin v1.2.0 — pendiente
-  - **Pace Coffee Roasters** — Jumpseller: nuevas API credentials — pendiente
+  - [x] **Pace Coffee Roasters** — Jumpseller RESUELTO ✅ — reconectado desde dashboard VentaTalk, token actualizado, 15 productos sincronizados (13 jun)
 
 ---
 
@@ -108,10 +103,23 @@
 - [ ] Pipeline status visible en conversaciones
 - [ ] Optimización embeddings — batch processing
 - [ ] Tests — no hay tests automatizados
+  - Intento jun 2026: test del endpoint /whatsapp/connect con mocks de Graph API. Happy path PASÓ (valida exchange→WABA→phone_numbers→upsert correcto). Pero conftest.py requiere reescritura (NullPool, fixtures con commit explícito, teardown FK entre phone_numbers/businesses) — cambio grande a infra compartida, descartado por falta de tiempo para validar contra toda la suite. Retomar en sesión dedicada: reescribir conftest + correr suite completa antes de commitear.
 - [x] Logrotate — configurado en `/etc/logrotate.d/docker-containers` (50MB max, 5 rotaciones, diario vía systemd timer)
 - [x] Monitoreo proactivo — UptimeRobot activo (4 monitores: landing, app, api, admin), alertas por email
 
 ---
+
+## ✅ WhatsApp Embedded Signup — IMPLEMENTADO Y DESPLEGADO (jun 2026)
+
+- [x] Backend: POST/GET/DELETE /api/v1/integrations/whatsapp/{connect,status,disconnect}
+- [x] Frontend: card "WhatsApp Business" en /dashboard/integrations con FB JS SDK
+- [x] Fix: callback de FB.login debe ser sync (no async) — SDK hace type-check estricto
+- [x] CI: --env-file .env.production agregado al deploy script
+- [x] Validado en producción: GET /status lee correctamente el sandbox existente
+- [x] Validado: SDK carga, popup de Meta abre, config_id y permisos correctos
+- [x] Validado (test con mocks): lógica de /connect correcta (exchange→WABA→upsert)
+- [ ] **BLOQUEADO por Meta**: completar conexión real requiere Advanced Access (App Review) — mensaje exacto: "La app de socio no tiene los permisos avanzados de mensajes y administración de WhatsApp Business necesarios para el registro"
+- [ ] Próxima semana: completar Tech Provider + Business Verification (docs legales VentaTalk) → desbloquea App Review → probar conexión real con WABA externo (ej. número personal de Hanowar como WhatsApp oficial de VentaTalk, o piloto real)
 
 ## ✅ Completado en esta iteración
 
@@ -138,3 +146,28 @@
 ## ✅ Completado — reconstrucción VPS (mayo 2026)
 
 Ver historial previo: hardening VPS, Docker stack, Nginx 4 server blocks, 8 migraciones aplicadas, seed businesses, Next.js 15.5.18, credenciales rotadas, POSTGRES_USER renombrado, panel admin MVP, plugin WordPress v1.1.0, migración arturodev.info.
+
+---
+
+## 💡 Ideas / Plan B (sin compromiso aún)
+
+- **WhatsApp no oficial (tipo Kommo "WhatsApp Lite", Baileys/whatsapp-web.js)** — conexión vía QR, sin App Review de Meta, funciona en minutos. Riesgo: viola ToS de WhatsApp, Meta banea números con patrones de automatización. Considerar SOLO como demo desechable para prospects que quieren ver algo funcionando antes de comprometerse — NUNCA para el WhatsApp principal de un piloto real. Plan A (Cloud API oficial) sigue siendo el camino correcto y ya está ~90% construido, solo falta aprobación de Meta.
+
+---
+
+## 🔍 Triage Dependabot (39 alertas) — jun 2026
+
+**Para sesión de Claude Code (mañana, contexto fresco):**
+
+1. **axios → última major version** (frontend) — resuelve ~15 alertas de un golpe (prototype pollution, ReDoS, SSRF, header injection, etc). Correr build + tests del frontend después.
+2. **python-jose** (🔴 CRITICAL — algorithm confusion con claves ECDSA) — backend/auth. PRIMERO revisar si `jwt.decode()` ya fija `algorithms=["HS256"]` explícitamente (si sí, riesgo real es bajo pero igual actualizar versión). Si no está fijado, es el fix más urgente de los 39.
+3. **python-multipart** (🟠 High — arbitrary file write + DoS headers) — revisar endpoints de upload de archivos/imágenes de catálogo.
+4. **langchain-community** (🟠 High — XXE) — confirmar si se usa activamente o es dependencia transitiva sin uso real (¿se importa en algún lado?).
+5. **cryptography** (🟠 High — SECT curves) — update de versión, bajo riesgo de breaking changes.
+
+**No urgente / bajo riesgo:**
+- `pytest` tmpdir — dependencia de dev, no afecta producción
+- Resto de axios Moderate/Low — se resuelven con el update del punto 1
+- `python-dotenv`, `cryptography` OpenSSL Low
+
+Combinar con el ítem existente "npm audit fix en frontend" — mismo trabajo, una sola sesión.
