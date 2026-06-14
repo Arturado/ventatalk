@@ -155,9 +155,17 @@ Ver historial previo: hardening VPS, Docker stack, Nginx 4 server blocks, 8 migr
 
 ---
 
-## 🔍 Triage Dependabot (39 alertas) — jun 2026
+## ✅ Dependabot — RESUELTO (jun 2026)
 
-**Para sesión de Claude Code (mañana, contexto fresco):**
+- [x] axios 1.14.0 → 1.17.0 (frontend) — ~22 alertas High resueltas
+- [x] python-jose 3.3.0 → 3.5.0 (Critical) — algoritmo ya estaba pineado explícito en jwt.decode, riesgo real era bajo
+- [x] python-multipart 0.0.12 → 0.0.32 (High)
+- [x] langchain ecosystem 0.3.9 → 0.3.30 + pins core/text-splitters (High, XXE)
+- [x] cryptography 43.0.3 → 44.0.3 (High)
+- [x] Deploy automático OK + smoke test en sandbox WhatsApp: bot responde correctamente sobre catálogo Y mantiene guardrails ante intento de desvío de tema — bump de langchain validado sin regresiones
+- Restante: ~2 moderate postcss/next (requiere downgrade de Next.js, no viable) + ~2 low sin prioridad
+
+**Triage original (referencia):**
 
 1. **axios → última major version** (frontend) — resuelve ~15 alertas de un golpe (prototype pollution, ReDoS, SSRF, header injection, etc). Correr build + tests del frontend después.
 2. **python-jose** (🔴 CRITICAL — algorithm confusion con claves ECDSA) — backend/auth. PRIMERO revisar si `jwt.decode()` ya fija `algorithms=["HS256"]` explícitamente (si sí, riesgo real es bajo pero igual actualizar versión). Si no está fijado, es el fix más urgente de los 39.
