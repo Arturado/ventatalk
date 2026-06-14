@@ -37,7 +37,7 @@ pydantic-settings==2.14.1
 email-validator==2.2.0
 
 # ── Utils ────────────────────────────────────────────────────────────
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 tenacity==9.0.0
 structlog==24.4.0
 
