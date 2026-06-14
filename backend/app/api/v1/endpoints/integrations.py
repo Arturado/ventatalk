@@ -107,6 +107,7 @@ class WooCommerceProduct(BaseModel):
     is_available: bool = True
     stock_quantity: Optional[int] = None
     sku: Optional[str] = None
+    product_url: Optional[str] = None
 
 
 class WooCommerceIngestRequest(BaseModel):
@@ -150,6 +151,33 @@ class WooCommerceCouponItem(BaseModel):
 class WooCommerceCouponIngestRequest(BaseModel):
     coupons: List[WooCommerceCouponItem]
     store_url: Optional[str] = None
+
+
+class WooCommerceVerifyRequest(BaseModel):
+    site_url: str
+
+
+class WooCommerceVerifyResponse(BaseModel):
+    verified: bool
+    message: str
+    wordpress_site_url: Optional[str] = None
+
+
+def _check_and_lock_site_url(wc_config: dict, incoming: Optional[str]) -> Optional[str]:
+    """Returns 403 detail str if site_url mismatches locked domain, else None.
+    Mutates wc_config to set wordpress_site_url on first connection."""
+    if not incoming:
+        return None
+    locked = wc_config.get("wordpress_site_url")
+    if not locked:
+        wc_config["wordpress_site_url"] = incoming.rstrip("/")
+        return None
+    if locked.rstrip("/").lower() == incoming.rstrip("/").lower():
+        return None
+    return (
+        f"Este token está registrado para {locked}. "
+        "Genera un nuevo token en VentaTalk Dashboard."
+    )
 
 
 # ── JUMPSELLER ────────────────────────────────────────────────────────
@@ -619,6 +647,46 @@ async def generate_woocommerce_token(
     return WooCommerceTokenResponse(token=plain_token, hint=hint)
 
 
+@router.post("/woocommerce/verify", response_model=WooCommerceVerifyResponse)
+async def verify_woocommerce_site(
+    body: WooCommerceVerifyRequest,
+    x_ventatalk_token: str = Header(..., alias="X-VentaTalk-Token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handshake de primera conexión: ata el token al dominio WordPress del plugin.
+    Primera llamada (wordpress_site_url NULL) → guarda el dominio y responde OK.
+    Llamadas siguientes desde el mismo dominio → OK.
+    Llamada desde dominio diferente → 403.
+    """
+    token_hash = _hash_token(x_ventatalk_token)
+    result = await db.execute(
+        select(Business).where(
+            text("integrations->'woocommerce'->>'token_hash' = :hash")
+        ).params(hash=token_hash)
+    )
+    business = result.scalar_one_or_none()
+    if not business:
+        raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
+
+    if not business.integrations:
+        business.integrations = {}
+    wc = business.integrations.setdefault("woocommerce", {})
+
+    error = _check_and_lock_site_url(wc, body.site_url)
+    if error:
+        raise HTTPException(status_code=403, detail=error)
+
+    flag_modified(business, "integrations")
+    await db.commit()
+
+    return WooCommerceVerifyResponse(
+        verified=True,
+        message="Dominio verificado correctamente.",
+        wordpress_site_url=wc.get("wordpress_site_url"),
+    )
+
+
 @router.get("/woocommerce/status", response_model=WooCommerceStatus)
 async def woocommerce_status(business: Business = Depends(get_current_business)):
     config = (business.integrations or {}).get("woocommerce")
@@ -660,6 +728,15 @@ async def woocommerce_ingest(
     if not business:
         raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
 
+    # 1b. Validación de dominio
+    if not business.integrations:
+        business.integrations = {}
+    wc = business.integrations.setdefault("woocommerce", {})
+    if body.store_url:
+        domain_error = _check_and_lock_site_url(wc, body.store_url)
+        if domain_error:
+            raise HTTPException(status_code=403, detail=domain_error)
+
     business_id = str(business.id)
     now = datetime.now(timezone.utc)
 
@@ -683,6 +760,7 @@ async def woocommerce_ingest(
             item.price        = prod.price
             item.category     = prod.category
             item.is_available = prod.is_available
+            item.product_url  = prod.product_url
             item.metadata_ = {**(item.metadata_ or {}), "image_url": prod.image_url, "stock_quantity": prod.stock_quantity, "sku": prod.sku}
             updated += 1
         else:
@@ -693,6 +771,7 @@ async def woocommerce_ingest(
                 price        = prod.price,
                 category     = prod.category,
                 is_available = prod.is_available,
+                product_url  = prod.product_url,
                 source       = "woocommerce",
                 external_id  = prod.external_id,
                 metadata_    = {"image_url": prod.image_url, "stock_quantity": prod.stock_quantity, "sku": prod.sku} if (prod.image_url or prod.stock_quantity is not None or prod.sku) else {},
@@ -700,8 +779,6 @@ async def woocommerce_ingest(
             created += 1
 
     # 3. Actualizar estadísticas del negocio
-    if not business.integrations:
-        business.integrations = {}
     if "woocommerce" not in business.integrations:
         business.integrations["woocommerce"] = {}
 
@@ -745,6 +822,13 @@ async def woocommerce_orders_ingest(
 
     if not business:
         raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
+
+    # Validación de dominio
+    if body.store_url and business.integrations:
+        wc = (business.integrations or {}).get("woocommerce", {})
+        domain_error = _check_and_lock_site_url(wc, body.store_url)
+        if domain_error:
+            raise HTTPException(status_code=403, detail=domain_error)
 
     now = datetime.now(timezone.utc)
     created = updated = 0
@@ -820,6 +904,13 @@ async def woocommerce_coupons_ingest(
 
     if not business:
         raise HTTPException(status_code=401, detail="Token inválido o no reconocido.")
+
+    # Validación de dominio
+    if body.store_url and business.integrations:
+        wc = (business.integrations or {}).get("woocommerce", {})
+        domain_error = _check_and_lock_site_url(wc, body.store_url)
+        if domain_error:
+            raise HTTPException(status_code=403, detail=domain_error)
 
     created = updated = 0
 

@@ -3,7 +3,7 @@ Contributors: ventatalk
 Tags: whatsapp, chat, widget, floating button, ventatalk, chatbot, ia, ventas
 Requires at least: 5.9
 Tested up to: 6.7
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -108,9 +108,15 @@ Solo se envía el producto afectado, no el catálogo completo. Si el token no es
 
 1. Botón flotante de WhatsApp en la esquina inferior derecha
 2. Popup expandido con nombre del negocio y CTA
-3. Panel de configuración en WordPress Admin → Ajustes → VentaTalk
+3. Panel de configuración en WordPress Admin → VentaTalk → Configuración
 
 == Changelog ==
+
+= 1.2.0 =
+* Menú top-level propio en WP-Admin con ícono SVG (posición 58, debajo de WooCommerce)
+* Identidad visual VentaTalk: dashboard con stats, botón de sync con branding propio, CSS encolado solo en páginas del plugin
+* Validación de dominio: handshake automático al guardar el token — el token queda "atado" al primer sitio que lo usa; tokens usados en otro dominio reciben 403
+* Tracking 2.0 Fase 2b: product_url (get_permalink) incluido en el payload de sincronización de productos
 
 = 1.1.0 =
 * Renombrado el slug del plugin a "ventatalk"

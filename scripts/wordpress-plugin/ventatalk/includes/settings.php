@@ -14,8 +14,11 @@ function ventatalk_default_options() {
         'position'      => 'right',
         'delay'         => 2,
         // Catálogo
-        'api_token'     => '',
-        'api_url'       => 'https://api.ventatalk.com',
+        'api_token'      => '',
+        'api_url'        => 'https://api.ventatalk.com',
+        // Verificación de dominio (v1.2.0)
+        'domain_status'  => '',   // 'verified' | 'error' | 'error_token' | ''
+        'domain_site_url' => '',  // URL bloqueada tras primer handshake
     ];
 }
 
@@ -273,7 +276,9 @@ function ventatalk_render_field( $field ) {
 }
 
 function ventatalk_sanitize_options( $input ) {
+    $old   = get_option( 'ventatalk_options', [] );
     $clean = [];
+
     $clean['widget_type']   = in_array( $input['widget_type'] ?? '', [ 'whatsapp', 'webchat' ] ) ? $input['widget_type'] : 'whatsapp';
     $clean['phone']         = sanitize_text_field( $input['phone'] ?? '' );
     $clean['business_name'] = sanitize_text_field( $input['business_name'] ?? '' );
@@ -284,6 +289,59 @@ function ventatalk_sanitize_options( $input ) {
     $clean['delay']         = max( 0, min( 30, intval( $input['delay'] ?? 2 ) ) );
     $clean['api_token']     = sanitize_text_field( $input['api_token'] ?? '' );
     $clean['api_url']       = esc_url_raw( $input['api_url'] ?? 'https://api.ventatalk.com' );
+
+    // Preservar campos de dominio por defecto
+    $clean['domain_status']   = $old['domain_status']   ?? '';
+    $clean['domain_site_url'] = $old['domain_site_url'] ?? '';
+
+    // Token vacío → limpiar verificación
+    if ( empty( $clean['api_token'] ) ) {
+        $clean['domain_status']   = '';
+        $clean['domain_site_url'] = '';
+        return $clean;
+    }
+
+    // Token nuevo → disparar handshake de dominio
+    $old_token = $old['api_token'] ?? '';
+    if ( $clean['api_token'] !== $old_token ) {
+        $api_url  = rtrim( $clean['api_url'], '/' );
+        $site_url = get_site_url();
+
+        $response = wp_remote_post(
+            $api_url . '/api/v1/integrations/woocommerce/verify',
+            [
+                'timeout' => 10,
+                'headers' => [
+                    'Content-Type'      => 'application/json',
+                    'X-VentaTalk-Token' => $clean['api_token'],
+                ],
+                'body' => wp_json_encode( [ 'site_url' => $site_url ] ),
+            ]
+        );
+
+        if ( is_wp_error( $response ) ) {
+            $clean['domain_status']   = 'error';
+            $clean['domain_site_url'] = '';
+        } else {
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+            if ( $code === 200 ) {
+                $clean['domain_status']   = 'verified';
+                $clean['domain_site_url'] = $body['wordpress_site_url'] ?? $site_url;
+            } elseif ( $code === 401 ) {
+                $clean['domain_status']   = 'error_token';
+                $clean['domain_site_url'] = '';
+            } else {
+                // 403 = token ya atado a otro dominio
+                $clean['domain_status']   = 'error';
+                $clean['domain_site_url'] = '';
+                $detail = $body['detail'] ?? 'Este token pertenece a otro sitio. Genera un nuevo token en VentaTalk Dashboard.';
+                add_settings_error( 'ventatalk_options', 'domain_mismatch', esc_html( $detail ), 'error' );
+            }
+        }
+    }
+
     return $clean;
 }
 
@@ -331,6 +389,7 @@ function ventatalk_build_product_payload( WC_Product $product ) {
         'stock_quantity' => $stock_quantity,
         'sku'            => $product->get_sku() !== '' ? $product->get_sku() : null,
         'is_available'   => $product->is_in_stock(),
+        'product_url'    => get_permalink( $product->get_id() ),
     ];
 }
 
@@ -653,6 +712,8 @@ function ventatalk_ajax_sync_catalog() {
         }
     }
 
+    update_option( 'ventatalk_last_sync_at', current_time( 'c' ) );
+
     wp_send_json_success( [
         'message' => sprintf(
             'Sincronización exitosa: %d productos nuevos, %d actualizados, %d órdenes y %d cupones sincronizados.',
@@ -665,135 +726,326 @@ function ventatalk_ajax_sync_catalog() {
     ] );
 }
 
-// ── Página de settings en el admin ────────────────────────────────────────────
+// ── Admin: CSS encolado solo en páginas de VentaTalk ─────────────────────────
+
+add_action( 'admin_enqueue_scripts', 'ventatalk_enqueue_admin_assets' );
+
+function ventatalk_enqueue_admin_assets() {
+    $screen = get_current_screen();
+    if ( ! $screen || strpos( $screen->id, 'ventatalk' ) === false ) return;
+
+    wp_enqueue_style(
+        'ventatalk-admin',
+        VENTATALK_URL . 'public/css/admin.css',
+        [],
+        VENTATALK_VERSION
+    );
+}
+
+// ── Admin: menú top-level ─────────────────────────────────────────────────────
 
 add_action( 'admin_menu', 'ventatalk_admin_menu' );
 
+// Permite que shop managers (manage_woocommerce sin manage_options) guarden settings
+add_filter( 'option_page_capability_ventatalk_group', function() {
+    return 'manage_woocommerce';
+} );
+
 function ventatalk_admin_menu() {
-    add_options_page(
-        'VentaTalk Widget',
+    $svg  = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="black"><path d="M12 3C6.5 3 2 6.58 2 11a7.77 7.77 0 0 0 2.75 5.74L3 21l4.75-1.5A11.14 11.14 0 0 0 12 21c5.5 0 10-3.58 10-8s-4.5-10-10-10z"/></svg>';
+    $icon = 'data:image/svg+xml;base64,' . base64_encode( $svg );
+
+    add_menu_page(
         'VentaTalk',
-        'manage_options',
+        'VentaTalk',
+        'manage_woocommerce',
         'ventatalk',
+        'ventatalk_render_dashboard_page',
+        $icon,
+        58
+    );
+
+    // Mismo slug que el parent → renombra el ítem auto-generado
+    add_submenu_page(
+        'ventatalk',
+        'Dashboard — VentaTalk',
+        'Dashboard',
+        'manage_woocommerce',
+        'ventatalk',
+        'ventatalk_render_dashboard_page'
+    );
+
+    add_submenu_page(
+        'ventatalk',
+        'Configuración — VentaTalk',
+        'Configuración',
+        'manage_woocommerce',
+        'ventatalk-settings',
         'ventatalk_render_settings_page'
     );
 }
 
-function ventatalk_render_settings_page() {
-    if ( ! current_user_can( 'manage_options' ) ) return;
-    $opts      = ventatalk_get_options();
-    $phone     = preg_replace( '/[^0-9]/', '', $opts['phone'] );
-    $has_token = ! empty( $opts['api_token'] );
-    $nonce     = wp_create_nonce( 'ventatalk_sync_nonce' );
+// ── Admin: página principal (dashboard) ───────────────────────────────────────
+
+function ventatalk_render_dashboard_page() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) return;
+
+    $opts          = ventatalk_get_options();
+    $has_token     = ! empty( $opts['api_token'] );
+    $domain_status = $opts['domain_status'] ?? '';
+    $domain_url    = $opts['domain_site_url'] ?? '';
+    $business_name = ! empty( $opts['business_name'] ) ? $opts['business_name'] : get_bloginfo( 'name' );
+    $last_sync     = get_option( 'ventatalk_last_sync_at', '' );
+    $nonce         = wp_create_nonce( 'ventatalk_sync_nonce' );
+
+    $product_count = 0;
+    if ( class_exists( 'WooCommerce' ) ) {
+        $product_count = count( wc_get_products( [ 'status' => 'publish', 'limit' => -1, 'return' => 'ids' ] ) );
+    }
+
+    if ( ! $has_token ) {
+        $badge_class = 'vt-badge-warning';
+        $badge_text  = 'Sin configurar';
+    } elseif ( $domain_status === 'verified' ) {
+        $badge_class = 'vt-badge-success';
+        $badge_text  = 'Conectado';
+    } elseif ( in_array( $domain_status, [ 'error', 'error_token' ], true ) ) {
+        $badge_class = 'vt-badge-error';
+        $badge_text  = 'Error de configuración';
+    } else {
+        $badge_class = 'vt-badge-neutral';
+        $badge_text  = 'Token configurado';
+    }
+
+    if ( $last_sync ) {
+        $ts                = strtotime( $last_sync );
+        $last_sync_display = $ts ? human_time_diff( $ts, current_time( 'timestamp' ) ) . ' atrás' : '—';
+    } else {
+        $last_sync_display = 'Nunca';
+    }
     ?>
-    <div class="wrap">
-        <h1 style="display:flex;align-items:center;gap:10px;">
-            <span style="background:#16a34a;color:white;padding:6px 10px;border-radius:8px;font-size:14px;">VentaTalk</span>
-            Chat Widget
-        </h1>
+    <div class="vt-admin-wrap">
+
+        <div class="vt-header">
+            <div class="vt-header-logo">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="22" height="22"><path d="M12 3C6.5 3 2 6.58 2 11a7.77 7.77 0 0 0 2.75 5.74L3 21l4.75-1.5A11.14 11.14 0 0 0 12 21c5.5 0 10-3.58 10-8s-4.5-10-10-10z"/></svg>
+                <strong>VentaTalk</strong>
+            </div>
+            <span class="vt-badge <?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( $badge_text ); ?></span>
+        </div>
+
+        <div class="vt-dashboard-grid">
+
+            <div class="vt-col-main">
+
+                <?php if ( ! $has_token ) : ?>
+                <div class="vt-card vt-card-setup">
+                    <h2 class="vt-card-title">Configura tu integración</h2>
+                    <p class="vt-card-desc">Para sincronizar tu catálogo WooCommerce con VentaTalk necesitas un token de API. Encuéntralo en VentaTalk Dashboard → Integraciones → WordPress.</p>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=ventatalk-settings' ) ); ?>" class="vt-btn vt-btn-primary">Ir a Configuración →</a>
+                </div>
+                <?php else : ?>
+
+                <div class="vt-card">
+                    <div class="vt-business-header">
+                        <div class="vt-business-name"><?php echo esc_html( $business_name ); ?></div>
+                        <?php if ( $domain_status === 'verified' && $domain_url ) : ?>
+                        <div class="vt-domain-tag">
+                            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <?php echo esc_html( preg_replace( '#^https?://#', '', rtrim( $domain_url, '/' ) ) ); ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="vt-stats-row">
+                        <div class="vt-stat-card">
+                            <div class="vt-stat-number"><?php echo esc_html( number_format( $product_count ) ); ?></div>
+                            <div class="vt-stat-label">Productos en tienda</div>
+                        </div>
+                        <div class="vt-stat-card">
+                            <div class="vt-stat-number"><?php echo esc_html( $last_sync_display ); ?></div>
+                            <div class="vt-stat-label">Última sincronización</div>
+                        </div>
+                    </div>
+
+                    <div id="vt-sync-result" class="vt-sync-result" style="display:none;"></div>
+
+                    <button
+                        id="vt-sync-btn"
+                        class="vt-btn vt-btn-primary vt-btn-sync"
+                        data-nonce="<?php echo esc_attr( $nonce ); ?>"
+                        data-ajax="<?php echo esc_attr( admin_url( 'admin-ajax.php' ) ); ?>"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14.93-2M4 14a8 8 0 0 0 14.93 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Sincronizar catálogo ahora
+                    </button>
+
+                    <p class="vt-sync-note">La sincronización en tiempo real ya está activa. Este botón ejecuta una sincronización completa manual.</p>
+                </div>
+
+                <?php endif; ?>
+
+                <?php if ( ! empty( $opts['phone'] ) ) : ?>
+                <div class="vt-card vt-card-shortcode">
+                    <div class="vt-shortcode-label">Shortcode del widget</div>
+                    <code class="vt-shortcode-code">[ventatalk_chat]</code>
+                    <div class="vt-shortcode-desc">Sin shortcode, el botón flotante aparece automáticamente en todas las páginas.</div>
+                </div>
+                <?php endif; ?>
+
+            </div><!-- .vt-col-main -->
+
+            <div class="vt-col-side">
+                <div class="vt-card vt-card-how">
+                    <h3 class="vt-how-title">Cómo funciona</h3>
+                    <div class="vt-steps">
+                        <div class="vt-step">
+                            <div class="vt-step-icon">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12h8M8 8h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            </div>
+                            <div class="vt-step-body">
+                                <div class="vt-step-title">Genera tu token</div>
+                                <div class="vt-step-desc">En VentaTalk Dashboard → Integraciones → WordPress. Pégalo en <a href="<?php echo esc_url( admin_url( 'admin.php?page=ventatalk-settings' ) ); ?>">Configuración</a>.</div>
+                            </div>
+                        </div>
+                        <div class="vt-step">
+                            <div class="vt-step-icon">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14.93-2M4 14a8 8 0 0 0 14.93 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                            <div class="vt-step-body">
+                                <div class="vt-step-title">Sincronización automática</div>
+                                <div class="vt-step-desc">Productos, órdenes y cupones se sincronizan al instante cuando los actualizas en WooCommerce.</div>
+                            </div>
+                        </div>
+                        <div class="vt-step">
+                            <div class="vt-step-icon">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20"><path d="M12 3C6.5 3 2 6.58 2 11a7.77 7.77 0 0 0 2.75 5.74L3 21l4.75-1.5A11.14 11.14 0 0 0 12 21c5.5 0 10-3.58 10-8s-4.5-10-10-10z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 11h.01M12 11h.01M16 11h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            </div>
+                            <div class="vt-step-body">
+                                <div class="vt-step-title">Tu agente IA responde</div>
+                                <div class="vt-step-desc">VentaTalk conoce tu catálogo completo y responde consultas por WhatsApp en tiempo real.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="https://ventatalk.com" target="_blank" class="vt-btn vt-btn-outline">Abrir VentaTalk Dashboard →</a>
+                </div>
+            </div><!-- .vt-col-side -->
+
+        </div><!-- .vt-dashboard-grid -->
+    </div><!-- .vt-admin-wrap -->
+
+    <?php if ( $has_token ) : ?>
+    <script>
+    (function () {
+        var btn    = document.getElementById('vt-sync-btn');
+        var result = document.getElementById('vt-sync-result');
+        if ( ! btn ) return;
+
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16" style="animation:vt-spin 1s linear infinite"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14.93-2M4 14a8 8 0 0 0 14.93 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sincronizando...';
+            result.style.display = 'none';
+            result.className     = 'vt-sync-result';
+
+            var form = new FormData();
+            form.append( 'action', 'ventatalk_sync_catalog' );
+            form.append( 'nonce',  btn.dataset.nonce );
+
+            fetch( btn.dataset.ajax, { method: 'POST', body: form } )
+                .then( function( r ) { return r.json(); } )
+                .then( function( data ) {
+                    result.style.display = 'block';
+                    if ( data.success ) {
+                        result.classList.add( 'vt-sync-ok' );
+                        result.textContent = '✓ ' + data.data.message;
+                    } else {
+                        result.classList.add( 'vt-sync-err' );
+                        result.textContent = '✗ ' + data.data.message;
+                    }
+                } )
+                .catch( function() {
+                    result.style.display = 'block';
+                    result.classList.add( 'vt-sync-err' );
+                    result.textContent = '✗ Error de red. Verifica tu conexión e intenta de nuevo.';
+                } )
+                .finally( function() {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14.93-2M4 14a8 8 0 0 0 14.93 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Sincronizar catálogo ahora';
+                } );
+        } );
+    } )();
+    </script>
+    <?php endif; ?>
+    <?php
+}
+
+// ── Admin: página de configuración ────────────────────────────────────────────
+
+function ventatalk_render_settings_page() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) return;
+    $opts          = ventatalk_get_options();
+    $phone         = preg_replace( '/[^0-9]/', '', $opts['phone'] );
+    $domain_status = $opts['domain_status'] ?? '';
+    $domain_url    = $opts['domain_site_url'] ?? '';
+    ?>
+    <div class="vt-admin-wrap">
+
+        <div class="vt-header">
+            <div class="vt-header-logo">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" width="22" height="22"><path d="M12 3C6.5 3 2 6.58 2 11a7.77 7.77 0 0 0 2.75 5.74L3 21l4.75-1.5A11.14 11.14 0 0 0 12 21c5.5 0 10-3.58 10-8s-4.5-10-10-10z"/></svg>
+                <strong>VentaTalk</strong>
+                <span class="vt-header-subtitle">/ Configuración</span>
+            </div>
+        </div>
 
         <?php if ( ! empty( $phone ) ) : ?>
-        <div class="notice notice-success" style="padding:10px 16px;margin:12px 0;">
+        <div class="vt-notice vt-notice-success">
             <strong>Widget activo.</strong> Tus visitantes pueden iniciar conversaciones en WhatsApp.
-            <a href="https://wa.me/<?php echo esc_attr( $phone ); ?>" target="_blank" style="margin-left:10px;">Probar enlace →</a>
+            <a href="https://wa.me/<?php echo esc_attr( $phone ); ?>" target="_blank">Probar enlace →</a>
         </div>
         <?php else : ?>
-        <div class="notice notice-warning" style="padding:10px 16px;margin:12px 0;">
+        <div class="vt-notice vt-notice-warning">
             <strong>Ingresa un número de WhatsApp</strong> para activar el widget.
         </div>
         <?php endif; ?>
 
-        <form method="post" action="options.php" style="max-width:620px;">
-            <?php
-            settings_fields( 'ventatalk_group' );
-            do_settings_sections( 'ventatalk' );
-            submit_button( 'Guardar cambios' );
-            ?>
-        </form>
+        <?php settings_errors( 'ventatalk_options' ); ?>
 
-        <?php if ( $has_token ) : ?>
-        <hr style="margin:32px 0;">
-        <h2>Sincronizar catálogo con VentaTalk</h2>
-        <p style="color:#555;max-width:540px;">
-            Envía todos los productos publicados de tu tienda WooCommerce a VentaTalk para que el agente IA los conozca.
-            La sincronización automática en tiempo real está activa — este botón es para una sincronización completa manual.
-        </p>
-        <p id="ventatalk-sync-result" style="display:none;padding:10px 16px;border-radius:6px;margin:12px 0;max-width:540px;"></p>
-        <button
-            id="ventatalk-sync-btn"
-            class="button button-primary"
-            style="display:flex;align-items:center;gap:8px;"
-            data-nonce="<?php echo esc_attr( $nonce ); ?>"
-            data-ajax="<?php echo esc_attr( admin_url( 'admin-ajax.php' ) ); ?>"
-        >
-            <span class="dashicons dashicons-update" style="margin-top:3px;"></span>
-            Sincronizar catálogo ahora
-        </button>
-        <p style="color:#888;font-size:12px;margin-top:8px;">
-            <?php
-            $count = count( wc_get_products( [ 'status' => 'publish', 'limit' => -1, 'return' => 'ids' ] ) );
-            echo esc_html( $count ) . ' producto' . ( $count !== 1 ? 's' : '' ) . ' publicado' . ( $count !== 1 ? 's' : '' ) . ' en tu tienda.';
-            ?>
-        </p>
-        <script>
-        (function () {
-            var btn    = document.getElementById('ventatalk-sync-btn');
-            var result = document.getElementById('ventatalk-sync-result');
-            if (!btn) return;
+        <div class="vt-card vt-settings-card">
+            <form method="post" action="options.php">
+                <?php
+                settings_fields( 'ventatalk_group' );
+                do_settings_sections( 'ventatalk' );
+                submit_button( 'Guardar cambios' );
+                ?>
+            </form>
 
-            btn.addEventListener('click', function () {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="dashicons dashicons-update" style="margin-top:3px;animation:rotation 1s linear infinite;"></span> Sincronizando...';
-                result.style.display = 'none';
+            <?php if ( ! empty( $opts['api_token'] ) ) : ?>
+            <div class="vt-domain-status-block">
+                <?php if ( $domain_status === 'verified' && $domain_url ) : ?>
+                    <div class="vt-domain-ok">
+                        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Dominio verificado: <strong><?php echo esc_html( $domain_url ); ?></strong>
+                    </div>
+                <?php elseif ( $domain_status === 'error_token' ) : ?>
+                    <div class="vt-domain-err">
+                        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><circle cx="8" cy="8" r="7" fill="#dc2626"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        Token inválido — genera uno nuevo en VentaTalk Dashboard.
+                    </div>
+                <?php elseif ( $domain_status === 'error' ) : ?>
+                    <div class="vt-domain-err">
+                        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><circle cx="8" cy="8" r="7" fill="#dc2626"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        Este token pertenece a otro sitio — contacta a soporte VentaTalk.
+                    </div>
+                <?php else : ?>
+                    <div class="vt-domain-pending">
+                        Token configurado. Guarda de nuevo si deseas verificar el dominio.
+                    </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
 
-                var form = new FormData();
-                form.append('action', 'ventatalk_sync_catalog');
-                form.append('nonce',  btn.dataset.nonce);
-
-                fetch(btn.dataset.ajax, { method: 'POST', body: form })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        result.style.display = 'block';
-                        if (data.success) {
-                            result.style.background = '#ecfdf5';
-                            result.style.border      = '1px solid #6ee7b7';
-                            result.style.color       = '#065f46';
-                            result.textContent = '✓ ' + data.data.message;
-                        } else {
-                            result.style.background = '#fef2f2';
-                            result.style.border      = '1px solid #fca5a5';
-                            result.style.color       = '#991b1b';
-                            result.textContent = '✗ ' + data.data.message;
-                        }
-                    })
-                    .catch(function() {
-                        result.style.display     = 'block';
-                        result.style.background  = '#fef2f2';
-                        result.style.border      = '1px solid #fca5a5';
-                        result.style.color       = '#991b1b';
-                        result.textContent = '✗ Error de red. Verifica tu conexión e intenta de nuevo.';
-                    })
-                    .finally(function() {
-                        btn.disabled = false;
-                        btn.innerHTML = '<span class="dashicons dashicons-update" style="margin-top:3px;"></span> Sincronizar catálogo ahora';
-                    });
-            });
-        })();
-        </script>
-        <style>
-        @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        </style>
-        <?php endif; ?>
-
-        <?php if ( ! empty( $phone ) ) : ?>
-        <hr style="margin:32px 0;">
-        <h2>Shortcode</h2>
-        <p>Inserta el widget en cualquier página o entrada:</p>
-        <code style="font-size:16px;padding:8px 14px;background:#f0f0f0;border-radius:6px;display:inline-block;">[ventatalk_chat]</code>
-        <p style="color:#666;font-size:13px;margin-top:8px;">
-            Si no usas el shortcode, el botón flotante aparece automáticamente en todas las páginas.
-        </p>
-        <?php endif; ?>
-    </div>
+    </div><!-- .vt-admin-wrap -->
     <?php
 }
