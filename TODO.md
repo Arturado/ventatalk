@@ -179,3 +179,40 @@ Ver historial previo: hardening VPS, Docker stack, Nginx 4 server blocks, 8 migr
 - `python-dotenv`, `cryptography` OpenSSL Low
 
 Combinar con el ítem existente "npm audit fix en frontend" — mismo trabajo, una sola sesión.
+
+---
+
+## 🔒 Refinamiento — Validación de dominio v2 (post v1.2.0)
+
+**Estado actual (v1.2.0)**: `_check_and_lock_site_url` es "first-come-first-served" — el primer `site_url` que use el token queda bloqueado como válido. Previene cambios accidentales de dominio, pero NO valida que el dominio sea legítimamente del negocio (si el token se filtra/comparte, simplemente se ata al primer sitio que lo use, sin alerta).
+
+**Mejora propuesta**: agregar campo "Sitio web oficial" en el perfil del negocio (VentaTalk Dashboard → Configuración/Perfil), declarado por el cliente al registrarse o en cualquier momento. `/verify` y la validación de ingest deberían comparar `site_url` entrante contra ESTE valor pre-registrado (no contra "lo que llegue primero"). Si no coincide → rechazar SIEMPRE, incluso en "primera conexión".
+
+Implica:
+- Campo nuevo en `businesses` o `integrations` (dashboard UI + backend)
+- Cambiar lógica de `_check_and_lock_site_url`: ya no "lock on first use", sino "compare against registered value" (con fallback: si el campo está vacío, mantener comportamiento actual de v1.2.0 como transición)
+- Onboarding: pedir el sitio web del negocio se vuelve un paso explícito
+
+## 💡 Idea — Widget de Chat Web (nuevo, no especificado aún)
+
+El plugin v1.2.0 ya muestra un selector "Tipo de widget: WhatsApp / Chat Web (Próximamente)". Chat Web = widget embebible de chat directo en el navegador (sin redirigir a WhatsApp), con su propio backend de conversaciones para visitantes anónimos del sitio. Feature nueva y de tamaño considerable (comparable a WhatsApp Embedded Signup) — requiere spec propia en sesión dedicada: diseño del widget embebible, modelo de conversaciones para visitantes web (vs contactos de WhatsApp), backend endpoint, identidad/sesión de visitantes anónimos.
+
+---
+
+## 🔴 PENDIENTE — Deploy v1.2.0 backend no llegó a producción (rate limit Docker Hub)
+
+**Diagnóstico completo (jun 2026, madrugada)**:
+- Código correcto en VPS filesystem (`~/ventatalk/backend/app/api/v1/endpoints/integrations.py` línea 661 tiene `/woocommerce/verify`)
+- Endpoint NO existe en `/api.ventatalk.com/openapi.json` ni en el container `api` corriendo — la imagen Docker nunca se reconstruyó con este código (ni el commit de v1.2.0 ni el fix de normalización llegaron al container, aunque CI mostró ✅ verde en ambos — investigar por qué CI no detectó el fallo)
+- `docker compose build --no-cache api` falla con 429 Too Many Requests de Docker Hub (`python:3.12-slim`)
+- `up -d api` sin rebuild no hace nada (container sigue con imagen vieja)
+
+**Para retomar (mañana)**:
+1. Opción rápida: `docker login` en el VPS (sube el límite de pulls de 100 a 200/6h) — `docker login -u <usuario_dockerhub>` con cuenta gratuita
+2. O esperar el reset del rate limit (unas horas) y reintentar
+3. Una vez el build pase sin 429: `docker compose -f docker-compose.prod.yml --env-file .env.production build --no-cache api && up -d api`
+4. Verificar: `curl -s https://api.ventatalk.com/openapi.json | grep -o '"woocommerce/verify"'` debe aparecer
+5. Re-probar en MP Cars: WP-Admin → VentaTalk → Configuración → borrar y repegar token → debería mostrar "✅ Dominio verificado" y desaparecer el banner "ERROR DE CONFIGURACIÓN"
+6. **Investigar por qué CI marcó ✅ verde** en los 2 deploys de hoy si el build de `api` no se actualizó — posible: el script de deploy no falla aunque `docker compose up --build` tenga errores parciales, o el 429 es intermitente y en otro momento del día sí pasó. Revisar logs de Actions de esos 2 runs específicos para confirmar si hubo 429 ahí también (silencioso).
+
+**Riesgo actual**: CERO — ningún cliente WooCommerce activo en producción (MP Cars es la prueba de hoy). El widget de WhatsApp en mpcars.cl quedó activo y funcional (eso usa código que SÍ está deployado de antes). Solo el handshake `/verify` y la validación de dominio en ingest (código nuevo de hoy) no están activos todavía — pero tampoco lo estaban antes, así que no es una regresión.
