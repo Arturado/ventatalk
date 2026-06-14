@@ -18,7 +18,7 @@ pgvector==0.3.6
 # ── IA ───────────────────────────────────────────────────────────────
 openai==1.57.0
 langchain==0.3.30
-langchain-openai==0.2.11
+langchain-openai==1.1.14
 langchain-community==0.3.31
 langchain-core==0.3.86
 langchain-text-splitters==0.3.11
