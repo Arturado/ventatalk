@@ -31,8 +31,8 @@ function ventatalk_enqueue_assets() {
     if ( empty( $opts['phone'] ) ) return;
 
     wp_enqueue_style(
-        'ventatalk-widget',
-        VENTATALK_URL . 'public/css/widget.css',
+        'ventatalk-admin',
+        VENTATALK_URL . 'public/css/ventatalk-admin.css',
         [],
         VENTATALK_VERSION
     );

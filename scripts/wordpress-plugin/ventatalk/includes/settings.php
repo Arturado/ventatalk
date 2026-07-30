@@ -808,10 +808,10 @@ function ventatalk_render_dashboard_page() {
         $badge_text  = 'Sin configurar';
     } elseif ( $domain_status === 'verified' ) {
         $badge_class = 'vt-badge-success';
-        $badge_text  = 'Conectado';
+        $badge_text  = 'Conectado y Sincronizado';
     } elseif ( in_array( $domain_status, [ 'error', 'error_token' ], true ) ) {
         $badge_class = 'vt-badge-error';
-        $badge_text  = 'Error de configuración';
+        $badge_text  = 'Sin conexión / Token no verificado';
     } else {
         $badge_class = 'vt-badge-neutral';
         $badge_text  = 'Token configurado';
@@ -860,7 +860,7 @@ function ventatalk_render_dashboard_page() {
                     <div class="vt-stats-row">
                         <div class="vt-stat-card">
                             <div class="vt-stat-number"><?php echo esc_html( number_format( $product_count ) ); ?></div>
-                            <div class="vt-stat-label">Productos en tienda</div>
+                            <div class="vt-stat-label">Productos sincronizados</div>
                         </div>
                         <div class="vt-stat-card">
                             <div class="vt-stat-number"><?php echo esc_html( $last_sync_display ); ?></div>
@@ -877,7 +877,7 @@ function ventatalk_render_dashboard_page() {
                         data-ajax="<?php echo esc_attr( admin_url( 'admin-ajax.php' ) ); ?>"
                     >
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14.93-2M4 14a8 8 0 0 0 14.93 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        Sincronizar catálogo ahora
+                        Sincronizar Catálogo Ahora
                     </button>
 
                     <p class="vt-sync-note">La sincronización en tiempo real ya está activa. Este botón ejecuta una sincronización completa manual.</p>
