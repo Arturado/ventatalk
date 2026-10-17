@@ -30,7 +30,7 @@ services:
       redis:
         condition: service_started
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   worker:
     build: ./backend
@@ -58,10 +58,11 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_META_APP_ID: ${META_APP_ID}
         NEXT_PUBLIC_META_CONFIG_ID: ${META_CONFIG_ID}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
     restart: always
     env_file: .env.production
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     mem_limit: 1.5g
     cpus: "1.0"
     healthcheck:
